@@ -7,6 +7,9 @@ This repo is an extension of the official cloudshell configuration management pa
 The base python cloudshell package has been extended for app configuration management to support gitlab private repos. 
 A 2G service leveraging the same base package is also included for use with physical resources. 
 
+See our [dev guide](https://devguide.quali.com/configmanagement/2020.1.0/cf-ansible.html) for further info on Ansible Configuration Management development.
+
+
 ## Gitlab Support
 - Gitlab links are supported, but for Private Repos require the URL to be in format of their REST api
 - http://<SERVER_IP>/api/<API_VERSION>/projects/<PROJECT_ID>/repository/files/<PROJECT_PATH>/raw?ref=<GIT_BRANCH>
@@ -74,6 +77,12 @@ The following attributes are supported for over-ride:
 - "Connection Method" - Lookup - Create a lookup variable with values \[SSH, WinRM\]
 - "Script Parameters" - String - to pass different params to different hosts
 - "Inventory Groups" - String - target different inventory group logic for different hosts
+
+## Optional
+- Add "Supports Ansible" Execution Server Selector. This is the same selector that 1G service uses to define your pools of servers that will run script.
+  - can be combinded with standard selector to further define your selectors per service
+- Create web link to script server by adding the following to UniversalSettings.xml on Quali Server:
+  - `<key name="Web Link" pattern="http://{Address}" `
 
 ## Changelog
 - 25/12/2020 - Added Gitlab Support & Parameter Over-rides
