@@ -12,7 +12,7 @@ See our [dev guide](https://devguide.quali.com/configmanagement/2020.1.0/cf-ansi
 
 ## Gitlab Support
 - Gitlab links are supported, but for Private Repos require the URL to be in format of their REST api
-- http://<SERVER_IP>/api/<API_VERSION>/projects/<PROJECT_ID>/repository/files/<PROJECT_PATH>/raw?ref=<GIT_BRANCH>
+- `http://<SERVER_IP>/api/<API_VERSION>/projects/<PROJECT_ID>/repository/files/<PROJECT_PATH>/raw?ref=<GIT_BRANCH>`
 - example - http://10.160.7.7/api/v4/projects/4/repository/files/hello_world.yml/raw?ref=master
 - The password field needs to be populated with gitlab access token, which will be sent along with request as header
 - Access Token only needed for private repos, password field can be left blank for public repos
@@ -50,14 +50,14 @@ This service shell uses the same python package as the 1G shell.
 |Playbook URL Full|String|Full path URL of script. For Github can be "raw" url. For gitlab, pass Rest API formatted url. Populate either this or base path + script path|
 |Playbook Base Path|String|Base URL to script. This path will join with script path passed to execute playbook command.|
 |Playbook Script Path|String|Path to script from root of repo. This will join with base path to create full URL.|
-|Connection Method|String|For Linux / Windows connections|
+|Connection Method|String|Lookup values \[SSH, WinRM\] - For Linux / Windows connections|
 |Address|String|**(Optional)** Address of Script Repo Server. Can be useful to see this on component or generate web link.|
 |Repo User|String|**(Optional)** Source Control user for private repo authentication. Required for Github Private Repo. For Gitlab user not required, only access token in password field.|
 |Repo Password|Password|**(Optional)** Source Control password for private repo authentication. For GitLab, add private access token here.|
-|Script Parameters|String|**(Optional)** key pair values passed playbook VARS file to be accesible in script. Pass in following format - key1,val1;key2,val2.|
-|Inventory Groups|String|**(Optional)** Designating groups in playbook to be executed.|
-|Ansible CMD Args|String|**(Optional)** Additional arguments passed to ansible-playbook command line execution.|
-|Timeout Minutes|Integer|**(Optional)** Minutes to wait while polling target hosts. (Defaults to 10)|
+|Script Parameters|String|**(Optional)** Variables accessible to playbook. These are populated in ansible "VARS" file. Pass in following format - key1,val1;key2,val2.|
+|Inventory Groups|String|**(Optional)** Designating groups in playbook to be executed. See Dev guide for mor info.|
+|Ansible CMD Args|String|**(Optional)** Additional arguments appended to ansible-playbook command line execution. Pass full string(ex. `ansible-playbook -i hosts.ini <ANSIBLE CMD ARGS>`|
+|Timeout Minutes|Integer|**(Optional)** Minutes to wait while polling target hosts. Default - 10|
 |Gitlab Branch|String|**(Optional)** Defaults to master branch. This attribute relevant for downloading from non-master branches in Gitlab repos.|
 
 ## Commands
@@ -72,6 +72,7 @@ There are a few ways to pass the playbook path to the command.
 2. Pass playbook path (relative to root of repo) to command. This will join together with base path attribute on service.
 3. Pass no command input, will fall back to Repo Full URL if populated, if not populated will fall back to base repo + script path attributes on service.
 
+Note: - `/raw?ref=<GIT_BRANCH>` can be left off url path for Gitlab URL on 2G shell, the shell will add this
 
 ## Over-riding Service with Resource Attributes
 The service by default will "broadcast it's attributes to all connected resources. 
@@ -83,11 +84,12 @@ The following attributes are supported for over-ride:
 - "Script Parameters" - String - to pass different params to different hosts
 - "Inventory Groups" - String - target different inventory group logic for different hosts
 
-## Optional
+## Optional Implementations
 - Add "Supports Ansible" Execution Server Selector. This is the same selector that 1G service uses to define your pools of servers that will run script.
   - can be combinded with standard selector to further define your selectors per service
-- Create web link to script server by adding the following to UniversalSettings.xml on Quali Server:
-  - `<key name="Web Link" pattern="http://{Address}" `
+- Create web link to script server by adding the following to UniversalSettings.xml on Quali Server and populating `Address` attribute on service:
+  - `<key name="Web Link" pattern="http://{Address}" icon-key="Web"/>`
+
 
 ## Changelog
 - 25/12/2020 - Added Gitlab Support & Parameter Over-rides
