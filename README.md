@@ -57,7 +57,7 @@ This service shell uses the same python package as the 1G shell.
 |Repo User|String|**(Optional)** Source Control user for private repo authentication. Required for Github Private Repo. For Gitlab user not required, only access token in password field.|
 |Repo Password|Password|**(Optional)** Source Control password for private repo authentication. For GitLab, add private access token here.|
 |Script Parameters|String|**(Optional)** Variables accessible to playbook. These are populated in ansible "VARS" file. Pass in following format - key1,val1;key2,val2.|
-|Inventory Groups|String|**(Optional)** Designating groups in playbook to be executed. See Dev guide for mor info.|
+|Inventory Groups|String|**(Optional)** Designating groups in playbook to be executed. Pass as comma separated string (group1, group2, group3). See Dev guide for more info.|
 |Ansible CMD Args|String|**(Optional)** Additional arguments appended to ansible-playbook command line execution. Pass full string(ex. `ansible-playbook -i hosts.ini <ANSIBLE CMD ARGS>`|
 |Timeout Minutes|Integer|**(Optional)** Minutes to wait while polling target hosts. Default - 10|
 |Gitlab Branch|String|**(Optional)** Defaults to master branch. This attribute relevant for downloading from non-master branches in Gitlab repos.|
