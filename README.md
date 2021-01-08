@@ -9,29 +9,31 @@ A 2G service leveraging the same base package is also included for use with phys
 
 See our [dev guide](https://devguide.quali.com/configmanagement/2020.1.0/cf-ansible.html) for further info on Ansible Configuration Management development.
 
-
-## Gitlab Support
+## Gitlab Private Repo Support
 - Gitlab links are supported, but for Private Repos require the URL to be in format of their REST api
-- `http://<SERVER_IP>/api/<API_VERSION>/projects/<PROJECT_ID>/repository/files/<PROJECT_PATH>/raw?ref=<GIT_BRANCH>`
-- example - http://10.160.7.7/api/v4/projects/4/repository/files/hello_world.yml/raw?ref=master
+  - `http://<SERVER_IP>/api/<API_VERSION>/projects/<PROJECT_ID>/repository/files/<PROJECT_PATH>/raw?ref=<GIT_BRANCH>`
+  - example - `http://10.160.7.7/api/v4/projects/4/repository/files/hello_world.yml/raw?ref=master`
 - The password field needs to be populated with gitlab access token, which will be sent along with request as header
 - Access Token only needed for private repos, password field can be left blank for public repos
-- The "User" field can be left blank for gitlab auth. Only access token needed
-- Public Repos appear to work fine with both "raw" url link as well as the API formatted URL with no token
-- Gitlab docs - https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html
+- The "User" field can be left blank for gitlab auth. Only access token needed.
+- Public Gitlab Repos work with both "raw" url link AND api-formatted URL with no token passed
+- [Gitlab docs](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html)
 
 ## App Configuration Management Param Overrides
-The following configuration management parameters can be over-ridden per blueprint by adding AND populating the following parameters:
-- REPO_URL
-- REPO_USER
-- REPO_PASSWORD (will be a plain text parameter)
-- CONNECTION_METHOD
+The following app configuration management parameters can be over-ridden per blueprint:
+- `REPO_URL` - Full path to script
+- `REPO_USER` - For private git repos, the username (not needed for gitlab)
+- `REPO_PASSWORD` - Github password / access token (for Gitlab, only access token will work)
+- `CONNECTION_METHOD` - acceptable values are only \[SSH, WinRM\] 
+
+NOTE: Parameters will only over-ride if the value is also populated. Value can be left empty on app with no over-ride action.
+Not all params must be present. User can choose which params to over-ride.
 
 ## To Install Package
 - Download python package from releases and place in local pypi server on Quali Server
-    - Path: C:\Program Files (x86)\QualiSystems\CloudShell\Server\Config\Pypi Server Repository
+    - Path: `C:\Program Files (x86)\QualiSystems\CloudShell\Server\Config\Pypi Server Repository`
 - Delete venv (if it exists) to force creation of new venv with updated package
-    - Path: C:\ProgramData\QualiSystems\venv\Ansible_Driver_{{driver_uid}}
+    - Path: `C:\ProgramData\QualiSystems\venv\Ansible_Driver_<DRIVER_UID>`
 
 # Ansible 2G Service For Physical Resources
 This is a 2G wrapper around the cloudshell ansible package. 
@@ -80,9 +82,9 @@ If select attributes are present AND populated on resource it will override the 
 These attributes need to be added to system as global attribute and attached to desired resource models.
 
 The following attributes are supported for over-ride:
-- "Connection Method" - Lookup - Create a lookup variable with values \[SSH, WinRM\]
-- "Script Parameters" - String - to pass different params to different hosts
-- "Inventory Groups" - String - target different inventory group logic for different hosts
+- `Connection Method` - Lookup - Create a lookup variable with values \[SSH, WinRM\]
+- `Script Parameters` - String - to pass different params to different hosts
+- `Inventory Groups` - String - target different inventory group logic for different hosts
 
 ## Optional Implementations
 - Add "Supports Ansible" Execution Server Selector. This is the same selector that 1G service uses to define your pools of servers that will run script.
