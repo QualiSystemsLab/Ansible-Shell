@@ -47,14 +47,14 @@ This service shell uses the same python package as the 1G shell.
 ## 2G Service Attributes
 |Attribute Name|Data Type|Description|
 |:---|:---|:---|
-|Playbook URL Full|String|Full path URL of script. For Github can be "raw" url. For gitlab, pass Rest API formatted url. If populated this takes precedence over base path + script path|
+|Playbook URL Full|String|Full path URL of script. For Github can be "raw" url. For gitlab, pass Rest API formatted url. Populate either this or base path + script path|
 |Playbook Base Path|String|Base URL to script. This path will join with script path passed to execute playbook command.|
 |Playbook Script Path|String|Path to script from root of repo. This will join with base path to create full URL.|
+|Connection Method|String|For Linux / Windows connections|
 |Address|String|**(Optional)** Address of Script Repo Server. Can be useful to see this on component or generate web link.|
 |Repo User|String|**(Optional)** Source Control user for private repo authentication. Required for Github Private Repo. For Gitlab user not required, only access token in password field.|
 |Repo Password|Password|**(Optional)** Source Control password for private repo authentication. For GitLab, add private access token here.|
-|Connection Method|String|For Linux / Windows connections|
-|Script Parameters|String|(Optional) key pair values passed playbook VARS file to be accesible in script. Pass in following format - key1,val1;key2,val2.|
+|Script Parameters|String|**(Optional)** key pair values passed playbook VARS file to be accesible in script. Pass in following format - key1,val1;key2,val2.|
 |Inventory Groups|String|**(Optional)** Designating groups in playbook to be executed.|
 |Ansible CMD Args|String|**(Optional)** Additional arguments passed to ansible-playbook command line execution.|
 |Timeout Minutes|Integer|**(Optional)** Minutes to wait while polling target hosts. (Defaults to 10)|
