@@ -60,12 +60,17 @@ This service shell uses the same python package as the 1G shell.
 |Timeout Minutes|Integer|**(Optional)** Minutes to wait while polling target hosts. (Defaults to 10)|
 |Gitlab Branch|String|**(Optional)** Defaults to master branch. This attribute relevant for downloading from non-master branches in Gitlab repos.|
 
+## Commands
+|Command|Description|
+|:-----|:-----|
+|Execute Playbook|Run playbook against connected resources.<br>**Playbook Path** (String): path to the playbook in script repo<br>Options for passing playbook path in next section|
+
 
 ## Passing Playbook Path Argument
 There are a few ways to pass the playbook path to the command.
 1. Pass the full URL to command input. This takes precedence over service attributes.
 2. Pass playbook path (relative to root of repo) to command. This will join together with base path attribute on service.
-3. Pass no command input, will fall back to Repo Full URL if populated, if not populated will fall back to base repo + script path 
+3. Pass no command input, will fall back to Repo Full URL if populated, if not populated will fall back to base repo + script path attributes on service.
 
 
 ## Over-riding Service with Resource Attributes
