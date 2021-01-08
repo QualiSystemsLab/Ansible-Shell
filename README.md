@@ -64,6 +64,7 @@ There are a few ways to pass the playbook path to the command.
 2. Pass playbook path (relative to root of repo) to command. This will join together with base path attribute on service.
 3. Pass no command input, will fall back to Repo Full URL if populated, if not populated will fall back to base repo + script path 
 
+
 ## Over-riding Service with Resource Attributes
 The service by default will "broadcast it's attributes to all connected resources. 
 If select attributes are present AND populated on resource it will override the service level attribute. 
