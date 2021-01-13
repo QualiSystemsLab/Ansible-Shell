@@ -42,12 +42,12 @@ node_types:
         type: string
         tags: [ user_input ]
       Connection Method:
-        description: For Linux / Windows connections
+        description: Specifies the "ansible_connection" host variable
         type: string
         tags: [user_input]
-        default: SSH
+        default: ssh
         constraints:
-          - valid_values: [ SSH, WinRM ]
+          - valid_values: [ ssh, winrm, network_cli ]
       Script Parameters:
         description: (Optional) key pair values passed playbook VARS file to be accesible in script. Pass in following format - key1,val1;key2,val2.
         type: string

@@ -6,7 +6,7 @@
             <Parameters>
                 <Parameter Name="playbook_path" Type="String"
                            DisplayName="Playbook Path"
-                           Description="Can pass the Full URL OR a shortened path that will be combined with base path attribute"
+                           Description="Can pass the Full URL OR a shortened path that will be combined with base path attribute. Will Fallback to value defined on service."
                            Mandatory="False"/>
             </Parameters>
         </Command>

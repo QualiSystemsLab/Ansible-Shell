@@ -11,6 +11,7 @@ from helper_code.shell_connector_helpers import get_connector_endpoints
 from helper_code.resource_helpers import get_resource_attribute_gen_agostic
 from helper_code.parse_script_params import get_params_list_from_semicolon_sep_str
 from helper_code.gitlab_api_url_validator import is_base_path_gitlab_api
+from helper_code.validate_protocols import is_path_supported_protocol
 from cloudshell.core.logger.qs_logger import get_qs_logger
 from ansible_configuration import AnsibleConfiguration, HostConfiguration
 
@@ -59,7 +60,7 @@ class AnsibleConfig2GDriver (ResourceDriverInterface):
         return completed_msg
 
     def _is_path_supported_protocol(self, path):
-        return any(path.startswith(protocol) for protocol in self.supported_protocols)
+        return is_path_supported_protocol(path, self.supported_protocols)
 
     @staticmethod
     def _append_gitlab_url_suffix(url, branch):
@@ -256,7 +257,7 @@ class AnsibleConfig2GDriver (ResourceDriverInterface):
         if curr_password:
             new_obj["repositoryDetails"]["password"] = "*******"
         json_copy = json.dumps(new_obj, indent=4)
-        reporter.debug_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
+        reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
 
         return ansi_conf_json
 
