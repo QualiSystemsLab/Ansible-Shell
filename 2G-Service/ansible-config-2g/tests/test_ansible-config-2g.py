@@ -4,10 +4,11 @@
 """
 Tests for `AnsibleConfig2GDriver`
 """
+from driver import AnsibleConfig2GDriver
 
 import unittest
 
-from driver import AnsibleConfig2GDriver
+
 
 
 class TestAnsibleConfig2GDriver(unittest.TestCase):

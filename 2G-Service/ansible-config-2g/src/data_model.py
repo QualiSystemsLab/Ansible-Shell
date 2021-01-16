@@ -164,7 +164,7 @@ class AnsibleConfig2G(object):
     @address.setter
     def address(self, value):
         """
-        (Optional) Address of Script Repo Server
+        (Optional) Address of Script Repo Server.
         :type value: str
         """
         self.attributes['Ansible Config 2G.Address'] = value
@@ -224,7 +224,7 @@ class AnsibleConfig2G(object):
     @playbook_script_path.setter
     def playbook_script_path(self, value):
         """
-        Base URL to script. This path will join with script path passed to execute playbook command. (Github - https://raw.githubusercontent.com/QualiSystemsLab/App-Configuration-Demo-Scripts/master/, Gitlab - http://<SERVER_IP>/api/v4/projects/<PROJECT_ID>/repository/files)
+        Path to script from root of repo. This will join with base path to create full URL.
         :type value: str
         """
         self.attributes['Ansible Config 2G.Playbook Script Path'] = value
@@ -239,7 +239,7 @@ class AnsibleConfig2G(object):
     @playbook_url_full.setter
     def playbook_url_full(self, value):
         """
-        Base URL to script. This path will join with script path passed to execute playbook command. (Github - https://raw.githubusercontent.com/QualiSystemsLab/App-Configuration-Demo-Scripts/master/, Gitlab - http://<SERVER_IP>/api/v4/projects/<PROJECT_ID>/repository/files)
+        Full path URL of script. For Github can be "raw" url. For gitlab, pass Rest API formatted url (Github - https://raw.githubusercontent.com/QualiSystemsLab/App-Configuration-Demo-Scripts/master/<FILE_PATH>, Gitlab - http://<SERVER_IP>/api/v4/projects/<PROJECT_ID>/repository/files/<FILE_PATH>/raw?ref=<BRANCH>)
         :type value: str
         """
         self.attributes['Ansible Config 2G.Playbook URL Full'] = value
@@ -252,9 +252,9 @@ class AnsibleConfig2G(object):
         return self.attributes['Ansible Config 2G.Connection Method'] if 'Ansible Config 2G.Connection Method' in self.attributes else None
 
     @connection_method.setter
-    def connection_method(self, value='SSH'):
+    def connection_method(self, value='ssh'):
         """
-        For Linux / Windows connections
+        Specifies the "ansible_connection" host variable
         :type value: str
         """
         self.attributes['Ansible Config 2G.Connection Method'] = value
@@ -284,7 +284,7 @@ class AnsibleConfig2G(object):
     @inventory_groups.setter
     def inventory_groups(self, value):
         """
-        (Optional) Designating groups in playbook to be executed
+        (Optional) Designating groups in playbook to be executed.
         :type value: str
         """
         self.attributes['Ansible Config 2G.Inventory Groups'] = value
@@ -314,7 +314,7 @@ class AnsibleConfig2G(object):
     @timeout_minutes.setter
     def timeout_minutes(self, value='10'):
         """
-        (Optional) Minutes to wait while polling target hosts
+        (Optional) Minutes to wait while polling target hosts.
         :type value: float
         """
         self.attributes['Ansible Config 2G.Timeout Minutes'] = value
@@ -327,12 +327,27 @@ class AnsibleConfig2G(object):
         return self.attributes['Ansible Config 2G.Gitlab Branch'] if 'Ansible Config 2G.Gitlab Branch' in self.attributes else None
 
     @gitlab_branch.setter
-    def gitlab_branch(self, value='master'):
+    def gitlab_branch(self, value):
         """
         (Optional) Defaults to master branch. This attribute relevant for downloading from non-master branches in Gitlab repos.
         :type value: str
         """
         self.attributes['Ansible Config 2G.Gitlab Branch'] = value
+
+    @property
+    def ansible_config_selector(self):
+        """
+        :rtype: str
+        """
+        return self.attributes['Ansible Config 2G.Ansible Config Selector'] if 'Ansible Config 2G.Ansible Config Selector' in self.attributes else None
+
+    @ansible_config_selector.setter
+    def ansible_config_selector(self, value):
+        """
+        (Optional) As alternative to connectors, match this attribute with target resources. Similar to Execution Server Selector Workflow.
+        :type value: str
+        """
+        self.attributes['Ansible Config 2G.Ansible Config Selector'] = value
 
     @property
     def name(self):
