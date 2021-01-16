@@ -3,7 +3,7 @@ tosca_definitions_version: tosca_simple_yaml_1_0
 metadata:
   template_name: Ansible Config 2G
   template_author: Quali
-  template_version: 1.0.0
+  template_version: 1.0.1
   template_icon: shell-icon.png
 
 description: >
@@ -49,7 +49,7 @@ node_types:
         constraints:
           - valid_values: [ ssh, winrm, network_cli ]
       Script Parameters:
-        description: (Optional) key pair values passed playbook VARS file to be accesible in script. Pass in following format - key1,val1;key2,val2.
+        description: (Optional) key pair values passed to HOST_VARS. Can pass simple arguments in this format (ansible_var1,val1;ansible_var2,val2) or JSON format for nested data structures (a dictionary or list of dictionaries accepted).
         type: string
         tags: [ user_input ]
       Inventory Groups:
@@ -67,6 +67,10 @@ node_types:
         tags: [ user_input ]
       Gitlab Branch:
         description: (Optional) Defaults to master branch. This attribute relevant for downloading from non-master branches in Gitlab repos.
+        type: string
+        tags: [ user_input ]
+      Ansible Config Selector:
+        description: (Optional) An alternative to connectors. Create and match this attribute value on target resources. Both matching selector and connected resources will run together.
         type: string
         tags: [ user_input ]
       Service Categories:

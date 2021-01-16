@@ -32,7 +32,6 @@ class AnsibleShell(object):
         :type playbook_executor: AnsibleCommandExecutor
         :type session_provider: CloudShellSessionProvider
         """
-
         http_request_service = http_request_service or HttpRequestService()
         zip_service = zip_service or ZipService()
         self.file_system = file_system or FileSystemService()
@@ -51,7 +50,7 @@ class AnsibleShell(object):
         :rtype str
         """
         with LoggingSessionContext(command_context) as logger:
-            logger.debug('\'execute_playbook\' is called with the configuration json: \n' + ansi_conf_json)
+            logger.info('\'execute_playbook\' is called with the configuration json: \n' + ansi_conf_json)
 
             with ErrorHandlingContext(logger):
                 with CloudShellSessionContext(command_context) as api:

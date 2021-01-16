@@ -19,16 +19,6 @@ See our [dev guide](https://devguide.quali.com/configmanagement/2020.1.0/cf-ansi
 - Public Gitlab Repos work with both "raw" url link AND api-formatted URL with no token passed
 - [Gitlab docs](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html)
 
-## App Configuration Management Param Overrides
-The following app configuration management parameters can be over-ridden per blueprint:
-- `REPO_URL` - Full path to script
-- `REPO_USER` - For private git repos, the username (not needed for gitlab)
-- `REPO_PASSWORD` - Github password / access token (for Gitlab, only access token will work)
-- `CONNECTION_METHOD` - acceptable values are only \[SSH, WinRM\] 
-
-NOTE: Parameters will only over-ride if the value is also populated. Value can be left empty on app with no over-ride action.
-Not all params must be present. User can choose which params to over-ride.
-
 ## To Install Package
 - Download python package from releases and place in local pypi server on Quali Server
     - Path: `C:\Program Files (x86)\QualiSystems\CloudShell\Server\Config\Pypi Server Repository`
@@ -52,7 +42,7 @@ This service shell uses the same python package as the 1G shell.
 |Playbook URL Full|String|Full path URL of script. For Github can be "raw" url. For gitlab, pass Rest API formatted url. Populate either this or base path + script path|
 |Playbook Base Path|String|Base URL to script. This path will join with script path passed to execute playbook command.|
 |Playbook Script Path|String|Path to script from root of repo. This will join with base path to create full URL.|
-|Connection Method|String|Lookup values \[SSH, WinRM\] - For Linux / Windows connections|
+|Connection Method|String|Lookup values \[ssh, winrm, network_cli\] - Type of ansible connection used|
 |Address|String|**(Optional)** Address of Script Repo Server. Can be useful to see this on component or generate web link.|
 |Repo User|String|**(Optional)** Source Control user for private repo authentication. Required for Github Private Repo. For Gitlab user not required, only access token in password field.|
 |Repo Password|Password|**(Optional)** Source Control password for private repo authentication. For GitLab, add private access token here.|
@@ -61,11 +51,13 @@ This service shell uses the same python package as the 1G shell.
 |Ansible CMD Args|String|**(Optional)** Additional arguments appended to ansible-playbook command line execution. Pass full string(ex. `ansible-playbook -i hosts.ini <ANSIBLE CMD ARGS>`|
 |Timeout Minutes|Integer|**(Optional)** Minutes to wait while polling target hosts. Default - 10|
 |Gitlab Branch|String|**(Optional)** Defaults to master branch. This attribute relevant for downloading from non-master branches in Gitlab repos.|
+|Ansible Config Selector|String|**(Optional)** An alternative to connectors. Create and match this attribute value on target resources. Both matching selector and connected resources will run together. |
 
 ## Commands
 |Command|Description|
 |:-----|:-----|
-|Execute Playbook|Run playbook against connected resources.<br>**Playbook Path** (String): path to the playbook in script repo<br>Options for passing playbook path in next section|
+|Execute Playbook|Run playbook against connected resources.<br>**Playbook Path** (String): path to the playbook in script repo. Options for passing playbook path in next section<br>**Script Params** (String): This will over-ride the service config attribute when passed here. See attribute for more info.|
+|Execute Infrastructure Playbook <br>**Hidden Command**| Run playbook against ANY cloudshell resources by passing resource names. This include those not in reservation.<br>**Infrastructure Resources** (String): Pass a comma separated list of Resource Names (Resource1, Resource2, Resource3)<br>**Playbook Path** (String): Same as default command<br>**Script Params** (String): Same as default command|
 
 
 ## Passing Playbook Path Argument
@@ -96,3 +88,4 @@ The following attributes are supported for over-ride:
 ## Changelog
 - 25/12/2020 - Added Gitlab Support & Parameter Over-rides
 - 07/01/2021 - Added 2G Service package for physical resources & deployed app resources
+- 17/01/2021 - Added support for Ansible List and Hash Variables (by passing JSON)
