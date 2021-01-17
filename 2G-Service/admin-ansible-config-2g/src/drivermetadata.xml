@@ -1,0 +1,42 @@
+<Driver Description="Describe the purpose of your CloudShell shell" MainClass="driver.AdminAnsibleConfig2GDriver"
+        Name="AdminAnsibleConfig2GDriver" Version="1.0.1" PythonVersion="2">
+    <Layout>
+        <Category Name="Default Run Playbook">
+            <Command Description="Execute playbook on connected resources." EnableCancellation="true"
+                     Name="execute_playbook" DisplayName="Execute Playbook">
+                <Parameters>
+                    <Parameter Name="playbook_path" Type="String"
+                               DisplayName="Playbook Path"
+                               Description="Can pass the Full URL OR a shortened path that will be combined with base path attribute. Will Fallback to value defined on service."
+                               Mandatory="False"/>
+                    <Parameter Name="script_params" Type="String"
+                               DisplayName="Script Params"
+                               Description='Variables passed to HOST_VARS file. Can pass simple arguments in this format (ansible_var1,val1;ansible_var2,val2). Use JSON for lists and hashes.{"var1": ["val1", "val2"]})'
+                               Mandatory="False"/>
+                </Parameters>
+            </Command>
+        </Category>
+        <Category Name="Infrastructure Commands">
+            <Command
+                    Description="Execute playbook on any cloudshell resources by passing resource name. Can be on any resource outside of sandbox."
+                    EnableCancellation="true"
+                    Name="execute_infrastructure_playbook" DisplayName="Execute Infrastructure Playbook">
+                <Parameters>
+                    <Parameter Name="infrastructure_resources" Type="String"
+                               DisplayName="Infrastructure Resources"
+                               Description="Cloudshell Resource Names. One resource or comma separated list. Names are Case-Sensitive."
+                               Mandatory="True"/>
+                    <Parameter Name="playbook_path" Type="String"
+                               DisplayName="Playbook Path"
+                               Description="Can pass the Full URL OR a shortened path that will be combined with base path attribute. Will Fallback to value defined on service."
+                               Mandatory="False"/>
+                    <Parameter Name="script_params" Type="String"
+                               DisplayName="Script Params"
+                               Description='Variables passed to HOST_VARS file. Can pass simple arguments in this format (ansible_var1,val1;ansible_var2,val2). Use JSON for lists and hashes.{"var1": ["val1", "val2"]})'
+                               Mandatory="False"/>
+                </Parameters>
+            </Command>
+        </Category>
+    </Layout>
+</Driver>
+
