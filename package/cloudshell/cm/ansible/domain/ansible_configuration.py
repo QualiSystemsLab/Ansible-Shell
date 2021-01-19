@@ -3,7 +3,9 @@ from cloudshell.api.cloudshell_api import CloudShellAPISession
 
 
 # OPTIONAL SCRIPT PARAMETERS, IF PRESENT WILL OVERRIDE THE DEFAULT READ-ONLY VALUES
+# THESE SHOULD BE CUSTOM PARAMS DEFINED ON APP
 CONNECTION_METHOD_PARAM = "CONNECTION_METHOD"
+ACCESS_KEY_PARAM = "ACCESS_KEY"
 
 
 class AnsibleConfiguration(object):
@@ -43,7 +45,7 @@ class HostConfiguration(object):
         self.parameters = {}
 
 
-def over_ride_defaults(ansi_conf, params_dict):
+def over_ride_defaults(ansi_conf, params_dict, host_index):
     """
     go over custom params and over-ride values for HOSTS only
     :param AnsibleConfiguration ansi_conf:
@@ -53,7 +55,10 @@ def over_ride_defaults(ansi_conf, params_dict):
     """
 
     if params_dict.get(CONNECTION_METHOD_PARAM):
-        ansi_conf.hosts_conf[0].connection_method = params_dict[CONNECTION_METHOD_PARAM].lower()
+        ansi_conf.hosts_conf[host_index].connection_method = params_dict[CONNECTION_METHOD_PARAM].lower()
+
+    if params_dict.get(ACCESS_KEY_PARAM):
+        ansi_conf.hosts_conf[host_index].connection_method = params_dict[CONNECTION_METHOD_PARAM].lower()
 
     return ansi_conf
 
@@ -87,7 +92,7 @@ class AnsibleConfigurationParser(object):
             ansi_conf.playbook_repo.username = json_obj['repositoryDetails'].get('username')
             ansi_conf.playbook_repo.password = json_obj['repositoryDetails'].get('password')
 
-        for json_host in json_obj.get('hostsDetails',[]):
+        for host_index, json_host in enumerate(json_obj.get('hostsDetails', [])):
             host_conf = HostConfiguration()
             host_conf.ip = json_host.get('ip')
             host_conf.connection_method = json_host.get('connectionMethod').lower()
@@ -100,8 +105,8 @@ class AnsibleConfigurationParser(object):
                 all_params_dict = dict((i['name'], i['value']) for i in json_host['parameters'])
                 host_conf.parameters = all_params_dict
                 if not is_second_gen_service:
-                    # 2G service can handle any over-ride logic, this is only relevant for default flow
-                    ansi_conf = over_ride_defaults(ansi_conf, all_params_dict)
+                    # 2G service doesn't need override logic, this is only relevant for default flow
+                    ansi_conf = over_ride_defaults(ansi_conf, all_params_dict, host_index)
             ansi_conf.hosts_conf.append(host_conf)
 
         return ansi_conf

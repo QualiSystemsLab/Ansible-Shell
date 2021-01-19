@@ -15,6 +15,7 @@ from helper_code.gitlab_api_url_validator import is_base_path_gitlab_api
 from helper_code.validate_protocols import is_path_supported_protocol
 from cloudshell.core.logger.qs_logger import get_qs_logger
 from ansible_configuration import AnsibleConfiguration, HostConfiguration
+from get_resource_from_context import get_resource_from_context
 
 # HOST OVERRIDE PARAMS - IF PRESENT ON RESOURCE THEY WILL OVERRIDE THE SERVICE DEFAULT
 # TO BE CREATED IN SYSTEM AS GLOBAL ATTRIBUTE
@@ -53,9 +54,17 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
         res_id = context.reservation.reservation_id
         reporter = self._get_sandbox_reporter(context, api)
         service_name = context.resource.name
-        ansible_config_json = self._get_ansible_config_json(context, api, reporter, playbook_path, script_params)
 
-        reporter.info_out("Service '{}' is Executing Ansible Playbook...".format(context.resource.name))
+        try:
+            ansible_config_json = self._get_ansible_config_json(context, api, reporter, playbook_path, script_params)
+        except Exception as e:
+            exc_msg = "Error building playbook request on '{}': {}".format(service_name, str(e))
+            reporter.exc_out(exc_msg)
+            api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
+                                     additionalInfo=str(e))
+            raise Exception(exc_msg)
+
+        reporter.info_out("'{}' is Executing Ansible Playbook...".format(context.resource.name))
         try:
             self.first_gen_ansible_shell.execute_playbook(context, ansible_config_json, cancellation_context)
         except Exception as e:
@@ -108,8 +117,17 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
         reporter = self._get_sandbox_reporter(context, api)
         service_name = context.resource.name
         resources = self._get_infrastructure_resources(infrastructure_resources, service_name, api, reporter)
-        ansible_config_json = self._get_ansible_config_json(context, api, reporter, playbook_path, script_params,
-                                                            resources)
+
+        reporter.info_out("'{}' is Executing Ansible Playbook...".format(context.resource.name))
+        try:
+            ansible_config_json = self._get_ansible_config_json(context, api, reporter, playbook_path, script_params,
+                                                                resources)
+        except Exception as e:
+            exc_msg = "Error building playbook request on '{}': {}".format(service_name, str(e))
+            reporter.exc_out(exc_msg)
+            api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
+                                     additionalInfo=str(e))
+            raise Exception(exc_msg)
 
         try:
             self.first_gen_ansible_shell.execute_playbook(context, ansible_config_json, cancellation_context)
@@ -148,12 +166,11 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
         2. full url on service takes precedence over base path
         3. base path concatenation last
         4. if input is not full url, then tries to concatenate with base bath on service
-        :param AdminAnsibleConfig2G resource:
+        :param AnsibleConfig2G resource:
         :param str playbook_path:
         :param SandboxReporter reporter:
         :return:
         """
-        service_name = resource.name
         service_full_url = resource.playbook_url_full
         gitlab_branch = resource.gitlab_branch if resource.gitlab_branch else "master"
         base_path = resource.playbook_base_path
@@ -202,7 +219,8 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
 
         # validate base path includes protocol
         if not self._is_path_supported_protocol(base_path):
-            err_msg = "Input Error - Base Path does not begin with valid protocol. Supported: {}".format(self.supported_protocols)
+            err_msg = "Input Error - Base Path does not begin with valid protocol. Supported: {}".format(
+                self.supported_protocols)
             reporter.err_out(err_msg)
             raise ValueError(err_msg)
 
@@ -273,7 +291,7 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
         :param CloudShellAPISession api:
         :return:
         """
-        resource = AdminAnsibleConfig2G.create_from_context(context)
+        resource = get_resource_from_context(context)
         service_name = context.resource.name
         service_connection_method = resource.connection_method
         service_inventory_groups = resource.inventory_groups
@@ -306,11 +324,6 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
             target_host_resource_names = list(set(all_linked_resources))
             target_host_resources = [api.GetResourceDetails(x) for x in target_host_resource_names]
 
-        # REPORT TARGET RESOURCES
-        resource_names = [x.Name for x in target_host_resources]
-        start_msg = "'{}' is running on : {}".format(service_name, resource_names)
-        reporter.info_out(start_msg)
-
         # INITIALIZE DATA MODEL AND START POPULATING
         ansi_conf = AnsibleConfiguration()
 
@@ -333,31 +346,56 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
         ansi_conf.repositoryDetails.password = password_val if password_val else None
 
         # START POPULATING HOSTS
+        missing_credential_hosts = []
         for curr_resource_obj in target_host_resources:
+            curr_resource_name = curr_resource_obj.Name
             host_conf = HostConfiguration()
             host_conf.ip = curr_resource_obj.Address
-
             attrs = curr_resource_obj.ResourceAttributes
 
             user_attr = get_resource_attribute_gen_agostic("User", attrs)
-            host_conf.username = user_attr.Value if user_attr else ""
+            user_attr_val = user_attr.Value if user_attr else ""
+            host_conf.username = user_attr_val
 
             password_attr = get_resource_attribute_gen_agostic("Password", attrs)
-            host_conf.password = password_attr.Value if password_attr else None
+            encrypted_password_val = password_attr.Value
+            host_conf.password = encrypted_password_val
 
             # OVERRIDE SERVICE ATTRIBUTES IF ATTRIBUTES EXIST ON RESOURCE
+            # ACCESS KEY
+            access_key_attr = get_resource_attribute_gen_agostic(ACCESS_KEY_PARAM, attrs)
+            encrypted_acces_key_val = access_key_attr.Value if access_key_attr else None
+            host_conf.accessKey = encrypted_acces_key_val
+
+            # VALIDATE HOST CREDENTIALS - NEED USER AND PASSWORD/ACCESS KEY
+            if user_attr_val:
+                decrypted_password = api.DecryptPassword(encrypted_password_val).Value
+                if encrypted_acces_key_val:
+                    decrypted_access_key = api.DecryptPassword(encrypted_acces_key_val).Value
+                else:
+                    decrypted_access_key = None
+                if not decrypted_password and not decrypted_access_key:
+                    missing_credential_hosts.append((curr_resource_name, "Empty Credentials Attribute on Resource"))
+            else:
+                missing_credential_hosts.append((curr_resource_name, "Empty User Attribute on Resource"))
 
             # GROUPS
             ansible_group_attr = get_resource_attribute_gen_agostic(INVENTORY_GROUP_PARAM, attrs)
             host_conf.groups = ansible_group_attr.Value if ansible_group_attr else service_inventory_groups
 
-            # ACCESS KEY
-            access_key_attr = get_resource_attribute_gen_agostic(ACCESS_KEY_PARAM, attrs)
-            host_conf.accessKey = access_key_attr.Value if access_key_attr else None
-
             # CONNECTION METHOD
+            resource_connection_method = None
             connection_method_attr = get_resource_attribute_gen_agostic(CONNECTION_METHOD_PARAM, attrs)
-            host_conf.connectionMethod = connection_method_attr.Value if connection_method_attr else service_connection_method
+            if connection_method_attr:
+                connection_val = connection_method_attr.Value
+                if connection_val:
+                    if connection_val.lower() not in ["na", "n/a"]:
+                        resource_connection_method = connection_val
+
+            if resource_connection_method:
+                host_conf.connectionMethod = resource_connection_method
+            else:
+                host_conf.connectionMethod = service_connection_method
 
             # CONNECTION SECURED
             connection_secured_attr = get_resource_attribute_gen_agostic(CONNECTION_SECURED_PARAM, attrs)
@@ -378,8 +416,19 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
 
             ansi_conf.hostsDetails.append(host_conf)
 
-        ansi_conf_json = ansi_conf.get_pretty_json()
+        if missing_credential_hosts:
+            missing_json = json.dumps(missing_credential_hosts, indent=4)
+            warning_msg = "=== '{}' Connected Hosts Missing Credentials ===\n{}".format(service_name, missing_json)
+            reporter.info_out(warning_msg)
+            err_msg = "Missing credentials on target hosts. See console / logs for info."
+            raise Exception(err_msg)
 
+        # REPORT TARGET RESOURCES
+        resource_names = [x.Name for x in target_host_resources]
+        start_msg = "'{}' Target Hosts :\n{}".format(service_name, json.dumps(resource_names, indent=4))
+        reporter.info_out(start_msg)
+
+        ansi_conf_json = ansi_conf.get_pretty_json()
         # hide repo password in json printout
         new_obj = json.loads(ansi_conf_json)
         curr_password = new_obj["repositoryDetails"]["password"]

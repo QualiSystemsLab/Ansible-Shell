@@ -1,13 +1,14 @@
 import requests
 from requests import Response
-from cloudshell.cm.ansible.domain.gitlab_api_url_validator import is_gitlab_rest_url
+from Helpers.gitlab_api_url_validator import is_gitlab_rest_url
+from playbook_downloader import HttpAuth
 
 
 class HttpRequestService(object):
     def get_response(self, url, auth, logger=None):
         """
-        :param url:
-        :param auth:
+        :param str url:
+        :param HttpAuth auth:
         :param logging.Logger logger:
         :return:
         """
@@ -42,9 +43,9 @@ class HttpRequestService(object):
 
     @staticmethod
     def _validate_response_status_code(response):
-        if 200 > response.status_code > 300:
+        if not response.ok:
             raise Exception('Failed to download script file: ' + str(response.status_code) + ' ' + response.reason +
-                            '. Please make sure the URL is valid, and the credentials are correct and necessary.')
+                            '. Please make sure the URL is valid, and any required credentials are correct.')
 
     @staticmethod
     def _is_content_html(content):
@@ -64,3 +65,12 @@ class HttpRequestService(object):
             raise Exception('Authentication failed. Reached Gitlab Login. Gitlab Access Token required.')
 
 
+if __name__ == "__main__":
+    TEST_URL = "http://192.168.85.62/api/v4/projects/2/repository/files/my_playbook.yml/raw?ref=master"
+    TEST_GITLAB_TOKEN = "UAAEwzj7qSZn3oHRjzbZ"
+    # TEST_GITLAB_TOKEN = "UAAEwzj7qSZn3oHRjzbZBROKEN"
+    auth = HttpAuth(username="", password=TEST_GITLAB_TOKEN)
+    service = HttpRequestService()
+    response = service.get_response(TEST_URL, auth)
+    print(response.ok)
+    pass
