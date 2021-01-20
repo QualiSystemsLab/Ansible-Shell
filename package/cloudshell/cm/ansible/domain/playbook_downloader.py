@@ -4,12 +4,7 @@ from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSample
 from cloudshell.cm.ansible.domain.http_request_service import HttpRequestService
 from file_system_service import FileSystemService
 from logging import Logger
-
-
-class HttpAuth(object):
-    def __init__(self, username, password):
-        self.username = username
-        self.password = password
+from models import HttpAuth
 
 
 class PlaybookDownloader(object):

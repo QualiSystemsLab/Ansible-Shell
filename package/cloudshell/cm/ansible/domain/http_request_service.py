@@ -1,7 +1,7 @@
 import requests
 from requests import Response
 from Helpers.gitlab_api_url_validator import is_gitlab_rest_url
-from playbook_downloader import HttpAuth
+from models import HttpAuth
 
 
 class HttpRequestService(object):

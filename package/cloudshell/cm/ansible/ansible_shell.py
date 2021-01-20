@@ -13,12 +13,13 @@ from cloudshell.cm.ansible.domain.host_vars_file import HostVarsFile
 from cloudshell.cm.ansible.domain.http_request_service import HttpRequestService
 from cloudshell.cm.ansible.domain.inventory_file import InventoryFile
 from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult
-from cloudshell.cm.ansible.domain.playbook_downloader import PlaybookDownloader, HttpAuth
+from cloudshell.cm.ansible.domain.playbook_downloader import PlaybookDownloader
 from cloudshell.cm.ansible.domain.temp_folder_scope import TempFolderScope
 from cloudshell.cm.ansible.domain.zip_service import ZipService
 from cloudshell.core.context.error_handling_context import ErrorHandlingContext
 from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionContext
 from cloudshell.shell.core.session.logging_session import LoggingSessionContext
+from domain.models import HttpAuth
 
 
 class AnsibleShell(object):
