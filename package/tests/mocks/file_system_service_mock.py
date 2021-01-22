@@ -60,6 +60,7 @@ class FileSystemServiceMock(FileSystemService):
             file_entries.append(file.path)
         return self.folders + file_entries
 
+
 class FileMock(object):
     def __init__(self, path, full_path):
         self.path = path

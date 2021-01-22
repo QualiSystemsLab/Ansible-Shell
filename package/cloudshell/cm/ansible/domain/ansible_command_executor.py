@@ -20,7 +20,7 @@ class AnsibleCommandExecutor(object):
         """
         :type playbook_file: str
         :type inventory_file: str
-        :type args: list[str]
+        :type args: str
         :type logger: Logger
         :type output_writer: OutputWriter
         :type cancel_sampler: CancellationSampler

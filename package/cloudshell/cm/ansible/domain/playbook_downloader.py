@@ -49,16 +49,16 @@ class PlaybookDownloader(object):
         :rtype [str,int]
         :return The downloaded file name
         """
-        logger.info('Downloading file from \'%s\' ...'%url)
+        logger.info('Downloading file from \'%s\' ...' % url)
         response = self.http_request_service.get_response(url, auth, logger)
         file_name = self.filename_extractor.get_filename(response)
 
-        with self.file_system.create_file(file_name) as file:
+        with self.file_system.create_file(file_name) as f:
             for chunk in response.iter_content(PlaybookDownloader.CHUNK_SIZE):
                 if chunk:
-                    file.write(chunk)
+                    f.write(chunk)
                 cancel_sampler.throw_if_canceled()
-            file_size = file.tell()
+            file_size = f.tell()
 
         logger.info('Done (file: %s, size: %s bytes)).' % (file_name, file_size))
         return file_name, file_size
@@ -70,19 +70,21 @@ class PlaybookDownloader(object):
         :return: Playbook file name
         :rtype str
         """
-        logger.info('Zip file was found, extracting file: %s ...' % (file_name))
+        logger.info('Zip file was found, extracting file: %s ...' % file_name)
         zip_files = self.zip_service.extract_all(file_name)
-        logger.info('Done (extracted %s files).'%len(zip_files))
+        logger.info('Done (extracted %s files).' % len(zip_files))
         logger.info('Files: ' + os.linesep + (os.linesep+'\t').join(zip_files))
 
-        yaml_files = [file_name for file_name in self.file_system.get_entries(self.file_system.get_working_dir()) if file_name.endswith(".yaml") or file_name.endswith(".yml")]
+        yaml_files = [file_name for file_name in self.file_system.get_entries(self.file_system.get_working_dir())
+                      if file_name.endswith(".yaml") or file_name.endswith(".yml")]
         playbook_name = None
         if len(yaml_files) > 1:
-            playbook_name = next((file_name for file_name in yaml_files if file_name == "site.yaml" or file_name == "site.yml"), None)
+            playbook_name = next((file_name for file_name in yaml_files
+                                  if file_name == "site.yaml" or file_name == "site.yml"), None)
         if len(yaml_files) == 1:
             playbook_name = yaml_files[0]
         if not playbook_name:
             raise Exception("Playbook file name was not found in zip file")
-        logger.info('Found playbook: \'%s\' in zip file' % (playbook_name))
+        logger.info('Found playbook: \'%s\' in zip file' % playbook_name)
 
         return playbook_name
