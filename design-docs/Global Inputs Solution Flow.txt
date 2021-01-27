@@ -3,9 +3,9 @@
 High Level:
 The solution is to reduce variable inputs in different parts of sandbox. A large number of global inputs can be easily made available to all playbooks, with unique variables to each app defined on the app. This solution will involve both the ansible python package and 2G shell.
 
-"Management Config" Flow (for config that runs against read-only URL):
+"Management Config" Flow in setup(for config that runs against read-only URL):
 1. User sets global inputs
-2. User sets inputs on apps, with the following reserved variables for defining a user playbook
+2. User sets inputs on apps, with the following reserved variables for defining a user playbook:
   - REPO_URL
   - REPO_USERNAME
   - REPO_URL
@@ -19,8 +19,14 @@ The solution is to reduce variable inputs in different parts of sandbox. A large
 
 
 2G ad-hoc flow:
-1. 
-Secondary User Config Flow Begins:
-1. Setup will read sandbox data for app configs, finding the ansible prefixed keys
-2. An admin service for each config is added to canvas
-3. Script params are populated, merging any ad-
+1. User populates script url and params like normal
+2. when running playbook command the service will read sandbox data to find default config data with matching resource name key (if it exists)
+3. params will be merged, any service level attributes over-riding the default app values (if values exist)
+4. playbook request is sent to driver, which will handle the global attribute merge step
+
+
+Secondary User Config Flow In Setup:
+1. Setup will read sandbox data for app configs, finding all the ansible prefixed keys
+2. An admin 2G config service for each config is added to canvas with alias the same as deployed app resource
+3. "Infrastructure command" is executed with target app name passed as target input:
+  - no script params are needed to be populated, the shell will call sandbox data again and retrieve these params and handle merge as part of it's normal manual flow (some extra api calls, but will reuse code and  help to reduce setup script complexity)
