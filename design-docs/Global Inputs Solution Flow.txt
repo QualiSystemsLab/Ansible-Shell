@@ -1,0 +1,26 @@
+# Ansible Global Inputs Flow
+
+High Level:
+The solution is to reduce variable inputs in different parts of sandbox. A large number of global inputs can be easily made available to all playbooks, with unique variables to each app defined on the app. This solution will involve both the ansible python package and 2G shell.
+
+"Management Config" Flow (for config that runs against read-only URL):
+1. User sets global inputs
+2. User sets inputs on apps, with the following reserved variables for defining a user playbook
+  - REPO_URL
+  - REPO_USERNAME
+  - REPO_URL
+  - INVENTORY_GROUPS
+3. driver will cache app request json to sandbox data, only the 
+  - this is so sandbox service can later read this data (config params not available via api)
+  - data will be stored under the following key "ansible_<resource_name>"
+4. Package driver will read global inputs and merge with app level attributes
+  - app level attributes will over-ride in case of conflict (if value populated)
+5. Default config management will run
+
+
+2G ad-hoc flow:
+1. 
+Secondary User Config Flow Begins:
+1. Setup will read sandbox data for app configs, finding the ansible prefixed keys
+2. An admin service for each config is added to canvas
+3. Script params are populated, merging any ad-
