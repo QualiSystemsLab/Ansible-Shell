@@ -379,9 +379,21 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             else:
                 missing_credential_hosts.append((curr_resource_name, "Empty User Attribute on Resource"))
 
-            # GROUPS
-            ansible_group_attr = get_resource_attribute_gen_agostic(INVENTORY_GROUP_PARAM, attrs)
-            host_conf.groups = ansible_group_attr.Value if ansible_group_attr else service_inventory_groups
+            # INVENTORY GROUPS - NEEDS TO BE A LIST OR NULL/NONE
+            resource_ansible_group_attr = get_resource_attribute_gen_agostic(INVENTORY_GROUP_PARAM, attrs)
+            if resource_ansible_group_attr:
+                if resource_ansible_group_attr.Value:
+                    groups_str = resource_ansible_group_attr.Value
+                else:
+                    groups_str = service_inventory_groups
+            else:
+                groups_str = service_inventory_groups
+
+            if groups_str:
+                inventory_groups_list = groups_str.strip().split(",")
+            else:
+                inventory_groups_list = None
+            host_conf.groups = inventory_groups_list
 
             # CONNECTION METHOD
             resource_connection_method = None
