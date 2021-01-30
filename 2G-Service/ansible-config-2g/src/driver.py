@@ -233,7 +233,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
 
             # FALLBACK TO FULL URL
             if service_full_url:
-                is_gitlab_api = is_base_path_gitlab_api(service_full_url)
+                is_gitlab_api = is_base_path_gitlab_api(service_full_url.strip())
                 if is_gitlab_api:
                     return self._append_gitlab_url_suffix(service_full_url, gitlab_branch), False
                 return service_full_url, False
@@ -251,7 +251,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             else:
                 url = base_path + "/" + service_playbook_path
 
-            is_gitlab_api = is_base_path_gitlab_api(base_path)
+            is_gitlab_api = is_base_path_gitlab_api(base_path.strip())
             if is_gitlab_api:
                 return self._append_gitlab_url_suffix(url, gitlab_branch), False
             return url, False
@@ -260,7 +260,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
 
         # if playbook path input begins with a protocol then treat as full url
         if self._is_path_supported_protocol(playbook_path_input):
-            is_gitlab_api = is_base_path_gitlab_api(playbook_path_input)
+            is_gitlab_api = is_base_path_gitlab_api(playbook_path_input.strip())
             if is_gitlab_api:
                 return self._append_gitlab_url_suffix(playbook_path_input, gitlab_branch), False
             return playbook_path_input, False
@@ -283,7 +283,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         else:
             url = base_path + "/" + playbook_path_input
 
-        is_gitlab_api = is_base_path_gitlab_api(url)
+        is_gitlab_api = is_base_path_gitlab_api(url.strip())
         if is_gitlab_api:
             return url + "/raw?ref={}".format(gitlab_branch), False
 
@@ -459,36 +459,34 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             else:
                 missing_credential_hosts.append((curr_resource_name, "Empty User Attribute on Resource"))
 
-            # INVENTORY GROUPS - NEEDS TO BE A LIST OR NULL/NONE TO FULFILL JSON STRUCTURE CONTRACT WITH PACKAGE
-
-            cached_inventory_groups_list = get_cached_inventory_groups(
-                cached_ansible_conf) if cached_ansible_conf else None
+            # INVENTORY GROUPS
+            cached_inventory_groups_str = get_cached_inventory_groups(cached_ansible_conf) \
+                if cached_ansible_conf else None
 
             # FOR CONNNECTORS FLOW SERVICE VALUE BROADCASTS, FOR 'GLOBAL' INVENTORY COMMAND NOT DESIRED BEHAVIOR
             resource_ansible_group_attr = get_resource_attribute_gen_agostic(INVENTORY_GROUP_PARAM, attrs)
             if resource_ansible_group_attr:
                 if resource_ansible_group_attr.Value:
                     groups_str = resource_ansible_group_attr.Value
-                    inventory_groups_list = groups_str.strip().split(",")
-
+                else:
+                    if is_global_inventory_cmd:
+                        groups_str = None
+                    else:
+                        groups_str = service_inventory_groups
+            else:
+                if cached_inventory_groups_str:
+                    groups_str = cached_inventory_groups_str
                 else:
                     if is_global_inventory_cmd:
                         groups_str = None
                     else:
                         groups_str = service_inventory_groups
 
-                    inventory_groups_list = groups_str.strip().split(",")
-
+            # INVENTORY GROUPS - NEEDS TO BE A LIST OR NULL/NONE TO FULFILL JSON STRUCTURE CONTRACT WITH PACKAGE
+            if groups_str:
+                inventory_groups_list = groups_str.strip().split(",")
             else:
-                if cached_inventory_groups_list:
-                    inventory_groups_list = cached_inventory_groups_list
-                else:
-                    if is_global_inventory_cmd:
-                        inventory_groups_list = None
-                    else:
-                        groups_str = service_inventory_groups
-                        inventory_groups_list = groups_str.strip().split(",")
-
+                inventory_groups_list = None
             host_conf.groups = inventory_groups_list
 
             # CONNECTION METHOD

@@ -3,6 +3,7 @@ from ansible_configuration import AnsibleConfiguration
 from cloudshell.shell.core.driver_context import ResourceCommandContext
 import copy
 
+
 def _get_resource_name_from_ip(resources, ansi_conf_ip):
     """
     :param CloudShellAPISessionapi:
@@ -67,7 +68,7 @@ def cache_data_and_merge_global_inputs(api, context, ansi_conf, logger):
 
     sb_global_inputs = api.GetReservationInputs(res_id).GlobalInputs
 
-    # MERGE GLOBAL INPUTS IF THEY DONT HAVE A VALUE
+    # MERGE GLOBAL INPUTS IF THEY DON'T HAVE A VALUE
     hosts_list = ansi_conf.hosts_conf
     for host in hosts_list:
         host_params_dict = host.parameters

@@ -66,8 +66,8 @@ class AnsibleShell(object):
                     logger.info(log_msg)
 
                     # FOR DEBUGGING PURPOSES TO CUT FLOW SHORT
-                    output_writer.write(log_msg)
-                    return
+                    # output_writer.write(log_msg)
+                    # return
 
                     cancellation_sampler = CancellationSampler(cancellation_context)
 
