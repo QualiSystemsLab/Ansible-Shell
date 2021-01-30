@@ -104,9 +104,11 @@ class AnsibleConfigurationParser(object):
             if json_host.get('parameters'):
                 all_params_dict = dict((i['name'], i['value']) for i in json_host['parameters'])
                 host_conf.parameters = all_params_dict
-                if not is_second_gen_service:
+
+                # CONSIDERING TO DEPRECATE THIS PARTICULAR OVERRIDE FEATURE COMPLETELY
+                # if not is_second_gen_service:
                     # 2G service doesn't need override logic, this is only relevant for default flow
-                    ansi_conf = over_ride_defaults(ansi_conf, all_params_dict, host_index)
+                    # ansi_conf = over_ride_defaults(ansi_conf, all_params_dict, host_index)
             ansi_conf.hosts_conf.append(host_conf)
 
         return ansi_conf

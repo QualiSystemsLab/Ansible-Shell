@@ -20,7 +20,9 @@ from cloudshell.core.context.error_handling_context import ErrorHandlingContext
 from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionContext
 from cloudshell.shell.core.session.logging_session import LoggingSessionContext
 from domain.models import HttpAuth
-
+from cloudshell.api.cloudshell_api import CloudShellAPISession
+from cloudshell.shell.core.driver_context import ResourceCommandContext
+from domain.sandbox_data_caching import cache_data_and_merge_global_inputs
 
 class AnsibleShell(object):
     INVENTORY_FILE_NAME = 'hosts'
@@ -56,7 +58,17 @@ class AnsibleShell(object):
             with ErrorHandlingContext(logger):
                 with CloudShellSessionContext(command_context) as api:
                     ansi_conf = AnsibleConfigurationParser(api).json_to_object(ansi_conf_json)
+
+                    # this is a branched action with side effect of saving sandbox data
+                    ansi_conf = cache_data_and_merge_global_inputs(api, command_context, ansi_conf, logger)
                     output_writer = ReservationOutputWriter(api, command_context)
+                    log_msg = "Ansible Config Data Object after global inputs merge:\n{}".format(ansi_conf.get_pretty_json())
+                    logger.info(log_msg)
+
+                    # FOR DEBUGGING PURPOSES TO CUT FLOW SHORT
+                    output_writer.write(log_msg)
+                    return
+
                     cancellation_sampler = CancellationSampler(cancellation_context)
 
                     with TempFolderScope(self.file_system, logger):
