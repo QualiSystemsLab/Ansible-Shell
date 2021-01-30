@@ -1,7 +1,7 @@
 from cloudshell.api.cloudshell_api import CloudShellAPISession, SandboxDataKeyValue
 from ansible_configuration import AnsibleConfiguration
 from cloudshell.shell.core.driver_context import ResourceCommandContext
-
+import copy
 
 def _get_resource_name_from_ip(resources, ansi_conf_ip):
     """
@@ -29,9 +29,9 @@ def _cache_host_data_to_sandbox(api, res_id, sandbox_resources, ansi_conf, logge
     :return same config object:
     :rtype AnsibleConfiguration
     """
-    hosts_list = ansi_conf.hosts_conf
+    hosts_list_copy = ansi_conf.hosts_conf[:]
     sandbox_data = api.GetSandboxData(res_id).SandboxDataKeyValues
-    for host in hosts_list:
+    for host in hosts_list_copy:
         ansi_conf_ip = host.ip
         resource_name = _get_resource_name_from_ip(sandbox_resources, ansi_conf_ip)
         if not resource_name:
@@ -39,7 +39,10 @@ def _cache_host_data_to_sandbox(api, res_id, sandbox_resources, ansi_conf, logge
         matching_sb_data = [x for x in sandbox_data if x.Key == "ansible_{}".format(resource_name)]
         if matching_sb_data:
             return
-        ansi_conf_json = ansi_conf.get_pretty_json()
+        ansi_conf_copy = copy.deepcopy(ansi_conf)
+        filtered_host_conf = [host for host in ansi_conf.hosts_conf if host.ip == ansi_conf_ip]
+        ansi_conf_copy.hosts_conf = filtered_host_conf
+        ansi_conf_json = ansi_conf_copy.get_pretty_json()
         sb_data_key = "ansible_" + resource_name
         sb_data_value = ansi_conf_json
         sb_data = [SandboxDataKeyValue(sb_data_key, sb_data_value)]
