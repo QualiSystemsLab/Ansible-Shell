@@ -8,12 +8,14 @@ The solution is to reduce variable inputs in different parts of sandbox. A large
 2. User sets inputs on apps, with the following reserved variables for defining a user playbook:
   - REPO_URL
   - REPO_USERNAME
-  - REPO_URL
+  - REPO_PASSWORD
   - INVENTORY_GROUPS
-3. driver will cache app request json to sandbox data, only the 
+3. PACKAGE DRIVER will cache app host data to sandbox data:
   - this is so sandbox service can later read this data (config params not available via api)
-  - data will be stored under the following key "ansible_<resource_name>"
-4. Package driver will read global inputs and merge with app level attributes
+  - data json will be stored under the following key "ansible_<resource_name>"
+  - if multiple hosts in list they will be reduced to one, only the matching host (for simplicity of design)
+  - an api call will be needed to find the resource name on canvas matching the IP inside host list
+4. PACKAGE DRIVER will read global inputs and merge with app level attributes
   - app level attributes will over-ride in case of conflict (if value populated)
 5. Default config management will run
 
@@ -21,12 +23,14 @@ The solution is to reduce variable inputs in different parts of sandbox. A large
 2G ad-hoc flow:
 1. User populates script url and params like normal
 2. when running playbook command the service will read sandbox data to find default config data with matching resource name key (if it exists)
-3. params will be merged, any service level attributes over-riding the default app values (if values exist)
+3. params will be merged, any service level attributes over-riding the default app values (if values exist), playbook URL will be taken from cached as well, local service value over-rides.
 4. playbook request is sent to driver, which will handle the global attribute merge step
 
 
 Secondary User Config Flow In Setup:
 1. Setup will read sandbox data for app configs, finding all the ansible prefixed keys
 2. An admin 2G config service for each config is added to canvas with alias the same as deployed app resource
+  - reserved keywords used to populate repo details on service
 3. "Infrastructure command" is executed with target app name passed as target input:
   - no script params are needed to be populated, the shell will call sandbox data again and retrieve these params and handle merge as part of it's normal manual flow (some extra api calls, but will reuse code and  help to reduce setup script complexity)
+4. If user playbook fails, the admin service remains on screen

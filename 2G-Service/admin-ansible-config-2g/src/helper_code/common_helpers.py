@@ -1,6 +1,11 @@
 """
 shared helper functions
 """
+import json
+
+
+def get_pretty_json_from_complex_obj(my_obj):
+    return json.dumps(my_obj, default=lambda o: getattr(o, '__dict__', str(o)), indent=4)
 
 
 def get_list_from_comma_separated_string(comma_separated_list):

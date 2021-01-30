@@ -350,6 +350,21 @@ class AdminAnsibleConfig2G(object):
         self.attributes['Admin Ansible Config 2G.Ansible Config Selector'] = value
 
     @property
+    def only_inventory_groups(self):
+        """
+        :rtype: bool
+        """
+        return self.attributes['Admin Ansible Config 2G.Only Inventory Groups'] if 'Admin Ansible Config 2G.Only Inventory Groups' in self.attributes else None
+
+    @only_inventory_groups.setter
+    def only_inventory_groups(self, value=False):
+        """
+        (Optional) Relevant to "inventory" playbook command. False will run playbook against ALL deployed apps. True will target only apps with Inventory Group attribute populated.
+        :type value: bool
+        """
+        self.attributes['Admin Ansible Config 2G.Only Inventory Groups'] = value
+
+    @property
     def name(self):
         """
         :rtype: str

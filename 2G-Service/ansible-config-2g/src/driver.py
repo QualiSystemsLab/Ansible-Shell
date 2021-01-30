@@ -1,8 +1,11 @@
 import json
-from cloudshell.api.cloudshell_api import CloudShellAPISession
+from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
 from cloudshell.shell.core.resource_driver_interface import ResourceDriverInterface
 from cloudshell.shell.core.driver_context import InitCommandContext, ResourceCommandContext, AutoLoadResource, \
     AutoLoadAttribute, AutoLoadDetails, CancellationContext
+
+from ansible_config_from_cached_json import get_cached_ansible_config_from_json, get_cached_repo_data, \
+    get_cached_inventory_groups, PlaybookRepository
 from data_model import *  # run 'shellfoundry generate' to generate data model classes
 from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionContext
 from cloudshell.shell.core.driver_context import Connector
@@ -18,7 +21,7 @@ from ansible_configuration import AnsibleConfiguration, HostConfiguration
 from get_resource_from_context import get_resource_from_context
 
 # HOST OVERRIDE PARAMS - IF PRESENT ON RESOURCE THEY WILL OVERRIDE THE SERVICE DEFAULT
-# TO BE CREATED IN SYSTEM AS GLOBAL ATTRIBUTE
+# TO BE CREATED IN SYSTEM AS GLOBAL ATTRIBUTES
 ACCESS_KEY_PARAM = "Access Key"
 CONNECTION_METHOD_PARAM = "Connection Method"
 SCRIPT_PARAMS_PARAM = "Script Parameters"
@@ -56,7 +59,8 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         service_name = context.resource.name
 
         try:
-            ansible_config_json = self._get_ansible_config_json(context, api, reporter, playbook_path, script_params)
+            ansible_config_json, resource_names = self._get_ansible_config_json(context, api, reporter, playbook_path,
+                                                                                script_params)
         except Exception as e:
             exc_msg = "Error building playbook request on '{}': {}".format(service_name, str(e))
             reporter.exc_out(exc_msg)
@@ -72,6 +76,9 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             reporter.exc_out(exc_msg)
             api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
                                      additionalInfo=str(e))
+            for name in resource_names:
+                api.SetResourceLiveStatus(resourceFullName=name, liveStatusName="Error",
+                                          additionalInfo=str(e))
             raise Exception(exc_msg)
 
         api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Online",
@@ -120,8 +127,9 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
 
         reporter.info_out("'{}' is Executing Ansible Playbook...".format(context.resource.name))
         try:
-            ansible_config_json = self._get_ansible_config_json(context, api, reporter, playbook_path, script_params,
-                                                                resources)
+            ansible_config_json, resource_names = self._get_ansible_config_json(context, api, reporter, playbook_path,
+                                                                                script_params,
+                                                                                resources)
         except Exception as e:
             exc_msg = "Error building playbook request on '{}': {}".format(service_name, str(e))
             reporter.exc_out(exc_msg)
@@ -136,6 +144,9 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             reporter.err_out(exc_msg)
             api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
                                      additionalInfo=str(e))
+            for name in resource_names:
+                api.SetResourceLiveStatus(resourceFullName=name, liveStatusName="Error",
+                                          additionalInfo=str(e))
             raise Exception(exc_msg)
 
         api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Online",
@@ -143,6 +154,45 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         completed_msg = "Ansible Flow Completed for '{}'.".format(service_name)
         reporter.warn_out(completed_msg, log_only=True)
         return completed_msg
+
+    @staticmethod
+    def _get_inventory_resources(api, res_id, inventory_only_bool):
+        """
+
+        :param CloudShellAPISession api:
+        :param str res_id:
+        :param bool inventory_only_bool:
+        :return:
+        :rtype list[ResourceInfo]:
+        """
+        res_details = api.GetReservationDetails(res_id, True).ReservationDescription
+        all_resources = res_details.Resources
+        root_resources = [x for x in all_resources if "/" not in x.Name]
+        sandbox_data = api.GetSandboxData(res_id).SandboxDataKeyValues
+
+        target_resources = []
+        for curr_resource in root_resources:
+            details = api.GetResourceDetails(curr_resource.Name)
+            if not inventory_only_bool:
+                target_resources.append(details)
+                continue
+            attrs = details.ResourceAttributes
+            inventory_groups_attr_search = [x for x in attrs if x.Name.lower() == INVENTORY_GROUP_PARAM.lower()]
+            if inventory_groups_attr_search:
+                inventory_group_val = inventory_groups_attr_search[0].Value
+                if inventory_group_val:
+                    target_resources.append(details)
+                    continue
+            matching_sb_data_key = [x for x in sandbox_data if x.Key == "ansible_{}".format(curr_resource.Name)]
+            if matching_sb_data_key:
+                cached_data_json = matching_sb_data_key[0].Value
+                cached_ansi_config = get_cached_ansible_config_from_json(cached_data_json)
+                cached_params = cached_ansi_config.hosts_conf[0].parameters
+                cached_inventory_groups = cached_params.get("INVENTORY_GROUPS")
+                if cached_inventory_groups:
+                    target_resources.append(details)
+
+        return target_resources
 
     def _is_path_supported_protocol(self, path):
         return is_path_supported_protocol(path, self.supported_protocols)
@@ -159,7 +209,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             url += "/raw?ref={}".format(branch)
         return url
 
-    def _build_repo_url(self, resource, playbook_path_input, reporter):
+    def _build_repo_url(self, resource, playbook_path_input, cached_repo_data, reporter):
         """
         build URL based on hierarchy of inputs.
         1. Command inputs take precedence over service values
@@ -167,7 +217,8 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         3. base path concatenation last
         4. if input is not full url, then tries to concatenate with base bath on service
         :param AnsibleConfig2G resource:
-        :param str playbook_path:
+        :param PlaybookRepository cached_repo_data:
+        :param str playbook_path_input:
         :param SandboxReporter reporter:
         :return:
         """
@@ -175,6 +226,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         gitlab_branch = resource.gitlab_branch if resource.gitlab_branch else "master"
         base_path = resource.playbook_base_path
         service_playbook_path = resource.playbook_script_path
+        cached_playbook_path = cached_repo_data.url if cached_repo_data else None
 
         # if no playbook input look for fallback values on service
         if not playbook_path_input:
@@ -183,11 +235,13 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             if service_full_url:
                 is_gitlab_api = is_base_path_gitlab_api(service_full_url)
                 if is_gitlab_api:
-                    return self._append_gitlab_url_suffix(service_full_url, gitlab_branch)
-                return service_full_url
+                    return self._append_gitlab_url_suffix(service_full_url, gitlab_branch), False
+                return service_full_url, False
 
             # FALLBACK TO BASE PATH
             if not base_path or not service_playbook_path:
+                if cached_playbook_path:
+                    return cached_playbook_path, True
                 err_msg = "Input Error - No valid playbook inputs found"
                 reporter.err_out(err_msg)
                 raise ValueError(err_msg)
@@ -199,8 +253,8 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
 
             is_gitlab_api = is_base_path_gitlab_api(base_path)
             if is_gitlab_api:
-                return self._append_gitlab_url_suffix(url, gitlab_branch)
-            return url
+                return self._append_gitlab_url_suffix(url, gitlab_branch), False
+            return url, False
 
         # COMMAND INPUT EXISTS
 
@@ -208,8 +262,8 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         if self._is_path_supported_protocol(playbook_path_input):
             is_gitlab_api = is_base_path_gitlab_api(playbook_path_input)
             if is_gitlab_api:
-                return self._append_gitlab_url_suffix(playbook_path_input, gitlab_branch)
-            return playbook_path_input
+                return self._append_gitlab_url_suffix(playbook_path_input, gitlab_branch), False
+            return playbook_path_input, False
 
         # check that base path is populated
         if not base_path:
@@ -231,9 +285,9 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
 
         is_gitlab_api = is_base_path_gitlab_api(url)
         if is_gitlab_api:
-            return url + "/raw?ref={}".format(gitlab_branch)
+            return url + "/raw?ref={}".format(gitlab_branch), False
 
-        return url
+        return url, False
 
     @staticmethod
     def _get_resources_from_connectors(connectors, service_name, api, reporter):
@@ -283,11 +337,11 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         return selector_linked_resources
 
     def _get_ansible_config_json(self, context, api, reporter, playbook_path, script_params,
-                                 infrastructure_resources=None):
+                                 supplied_resources=None, is_global_inventory_cmd=False):
         """
         :param ResourceCommandContext context:
         :param SandboxReporter reporter:
-        :param infrastructure_resources:
+        :param list[ResourceInfo] supplied_resources: resources obtained from method other than connectors logic
         :param CloudShellAPISession api:
         :return:
         """
@@ -300,18 +354,29 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         service_timeout_minutes = resource.timeout_minutes
         res_id = context.reservation.reservation_id
         config_selector = resource.ansible_config_selector
+        inventory_only_bool = True if resource.only_inventory_groups == "True" else False
 
         # FIND LINKED HOSTS: CONNECTORS + ATTRIBUTES
         """
-        Infrastructure resource command will ignore the connectors and linked attribute resources
-        Connector and linked resources will be merged into a set and run together
+        Infrastructure resource command + Inventory Command will ignore the connectors and linked attribute resources
+        They pass in their own 'supplied_resources'
+        Connector + attribute linked resources will be merged into a set and run together
         """
 
         # get host details from connectors
         connectors = context.connectors
 
-        if infrastructure_resources:
-            target_host_resources = infrastructure_resources
+        if supplied_resources:
+            # INFRASTRUCTURE COMMAND RESOURCES
+            target_host_resources = supplied_resources
+        elif not connectors and not config_selector:
+            # INVENTORY COMMAND FLOW
+            if inventory_only_bool:
+                reporter.info_out(
+                    "{} Inventory Playbook against resources with 'Inventory Groups' populated.".format(service_name))
+            else:
+                reporter.info_out("{} Inventory Playbook against ALL resources on canvas".format(service_name))
+            target_host_resources = self._get_inventory_resources(api, res_id, inventory_only_bool)
         else:
             connector_resources = self._get_resources_from_connectors(connectors, resource.name, api, reporter)
             connector_resource_names = [x.Name for x in connector_resources]
@@ -326,12 +391,10 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
 
         # INITIALIZE DATA MODEL AND START POPULATING
         ansi_conf = AnsibleConfiguration()
-
         ansi_conf.additionalArgs = service_additional_args if service_additional_args else None
         ansi_conf.timeoutMinutes = int(service_timeout_minutes) if service_timeout_minutes else 0
 
-        # default host inputs
-        # take command input, fallback to service values
+        # TAKE COMMAND ARGS AS PRIORITY, FALLBACK TO SERVICE VALUES
         if script_params:
             default_script_params = build_params_list(script_params)
         elif service_script_parameters:
@@ -339,16 +402,33 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         else:
             default_script_params = []
 
-        # repo details
-        ansi_conf.repositoryDetails.url = self._build_repo_url(resource, playbook_path, reporter)
-        ansi_conf.repositoryDetails.username = resource.repo_user
-        password_val = api.DecryptPassword(resource.repo_password).Value
-        ansi_conf.repositoryDetails.password = password_val if password_val else None
+        # NO URL SUPPLIED + MULTIPLE TARGET HOSTS NOT SUPPORTED
+        if not playbook_path and not resource.playbook_url_full and not resource.playbook_base_path:
+            if len(target_host_resources) > 1:
+                raise Exception("Can not run 'cached' playbook against multiple hosts. Not supported.")
+
+        cached_repo_data = None
 
         # START POPULATING HOSTS
         missing_credential_hosts = []
         for curr_resource_obj in target_host_resources:
             curr_resource_name = curr_resource_obj.Name
+
+            # GET CACHED SANDBOX DATA
+            sandbox_data = api.GetSandboxData(res_id).SandboxDataKeyValues
+            matching_sb_data = [x for x in sandbox_data
+                                if "ansible_{}".format(curr_resource_name) == x.Key]
+            if matching_sb_data:
+                cached_resource_data_json = matching_sb_data[0].Value
+                cached_ansible_conf = get_cached_ansible_config_from_json(cached_resource_data_json)
+            else:
+                reporter.warn_out("No cached data for '{}'".format(curr_resource_name))
+                cached_ansible_conf = None
+
+            if cached_ansible_conf and len(target_host_resources) == 1:
+                cached_repo_data = get_cached_repo_data(cached_ansible_conf)
+
+            # START BUILDING REQUEST
             host_conf = HostConfiguration()
             host_conf.ip = curr_resource_obj.Address
             attrs = curr_resource_obj.ResourceAttributes
@@ -379,20 +459,36 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             else:
                 missing_credential_hosts.append((curr_resource_name, "Empty User Attribute on Resource"))
 
-            # INVENTORY GROUPS - NEEDS TO BE A LIST OR NULL/NONE
+            # INVENTORY GROUPS - NEEDS TO BE A LIST OR NULL/NONE TO FULFILL JSON STRUCTURE CONTRACT WITH PACKAGE
+
+            cached_inventory_groups_list = get_cached_inventory_groups(
+                cached_ansible_conf) if cached_ansible_conf else None
+
+            # FOR CONNNECTORS FLOW SERVICE VALUE BROADCASTS, FOR 'GLOBAL' INVENTORY COMMAND NOT DESIRED BEHAVIOR
             resource_ansible_group_attr = get_resource_attribute_gen_agostic(INVENTORY_GROUP_PARAM, attrs)
             if resource_ansible_group_attr:
                 if resource_ansible_group_attr.Value:
                     groups_str = resource_ansible_group_attr.Value
-                else:
-                    groups_str = service_inventory_groups
-            else:
-                groups_str = service_inventory_groups
+                    inventory_groups_list = groups_str.strip().split(",")
 
-            if groups_str:
-                inventory_groups_list = groups_str.strip().split(",")
+                else:
+                    if is_global_inventory_cmd:
+                        groups_str = None
+                    else:
+                        groups_str = service_inventory_groups
+
+                    inventory_groups_list = groups_str.strip().split(",")
+
             else:
-                inventory_groups_list = None
+                if cached_inventory_groups_list:
+                    inventory_groups_list = cached_inventory_groups_list
+                else:
+                    if is_global_inventory_cmd:
+                        inventory_groups_list = None
+                    else:
+                        groups_str = service_inventory_groups
+                        inventory_groups_list = groups_str.strip().split(",")
+
             host_conf.groups = inventory_groups_list
 
             # CONNECTION METHOD
@@ -426,7 +522,37 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             else:
                 host_conf.parameters = default_script_params
 
+            # MERGE CACHED APP PARAMS - SERVICE LEVEL PARAMS WIN IN CASE OF CONFLICT
+            if cached_ansible_conf:
+                cached_params_dict = cached_ansible_conf.hosts_conf[0].parameters
+                cached_params_list = []
+                service_params_copy = host_conf.parameters[:]
+                for cached_key, cached_val in cached_params_dict.iteritems():
+                    if cached_val:
+                        for service_param in service_params_copy:
+                            service_key = service_param["name"]
+                            service_val = service_param["value"]
+                            if service_key == cached_key:
+                                if not service_val:
+                                    cached_params_list.append({"name": cached_key, "value": cached_val})
+                                    continue
+                                else:
+                                    continue
+                        cached_params_list.append({"name": cached_key, "value": cached_val})
+                host_conf.parameters.extend(cached_params_list)
+
             ansi_conf.hostsDetails.append(host_conf)
+
+        # REPO DETAILS
+        repo_url, is_cached_url = self._build_repo_url(resource, playbook_path, cached_repo_data, reporter)
+        ansi_conf.repositoryDetails.url = repo_url
+        if is_cached_url:
+            ansi_conf.repositoryDetails.username = cached_repo_data.username
+            ansi_conf.repositoryDetails.password = cached_repo_data.password
+        else:
+            ansi_conf.repositoryDetails.username = resource.repo_user
+            password_val = api.DecryptPassword(resource.repo_password).Value
+            ansi_conf.repositoryDetails.password = password_val if password_val else None
 
         if missing_credential_hosts:
             missing_json = json.dumps(missing_credential_hosts, indent=4)
@@ -441,6 +567,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         reporter.info_out(start_msg)
 
         ansi_conf_json = ansi_conf.get_pretty_json()
+
         # hide repo password in json printout
         new_obj = json.loads(ansi_conf_json)
         curr_password = new_obj["repositoryDetails"]["password"]
@@ -449,7 +576,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         json_copy = json.dumps(new_obj, indent=4)
         reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
 
-        return ansi_conf_json
+        return ansi_conf_json, resource_names
 
     @staticmethod
     def _get_sandbox_reporter(context, api):

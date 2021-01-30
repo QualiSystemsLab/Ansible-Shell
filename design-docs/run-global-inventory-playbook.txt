@@ -1,0 +1,8 @@
+# Global Inventory playbook command
+
+High Level:
+Command that will be present on the service that will run against ALL deployed apps in sandbox without need for a connection. The recommended methodology will be to run a large playbook and target the inventory groups of relevant resources.
+
+1. Create separate command called "Run Global Inventory Playbook"
+2. By default will run against "ALL" resources in sandbox, with a flag to target only apps with "Inventory Groups" attribute populated.
+3. add custom "Inventory Groups" attribute to deployed app model and populate, service will look for this populated value, empty values ignored

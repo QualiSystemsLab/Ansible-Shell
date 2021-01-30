@@ -3,7 +3,7 @@ tosca_definitions_version: tosca_simple_yaml_1_0
 metadata:
   template_name: Admin Ansible Config 2G
   template_author: Quali
-  template_version: 1.0.3
+  template_version: 2.0.0
   template_icon: shell-icon.png
 
 description: >
@@ -72,6 +72,11 @@ node_types:
       Ansible Config Selector:
         description: (Optional) An alternative to connectors. Create and match this attribute value on target resources. Both matching selector and connected resources will run together.
         type: string
+        tags: [ user_input ]
+      Only Inventory Groups:
+        description: (Optional) Relevant to "inventory" playbook command. False will run playbook against ALL deployed apps. True will target only apps with Inventory Group attribute populated.
+        type: boolean
+        default: false
         tags: [ user_input ]
       Service Categories:
         type: list

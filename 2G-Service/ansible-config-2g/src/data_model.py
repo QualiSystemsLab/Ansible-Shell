@@ -269,7 +269,7 @@ class AnsibleConfig2G(object):
     @script_parameters.setter
     def script_parameters(self, value):
         """
-        (Optional) key pair values passed playbook VARS file to be accesible in script. Pass in following format - key1,val1;key2,val2.
+        (Optional) key pair values passed to HOST_VARS. Can pass simple arguments in this format (ansible_var1,val1;ansible_var2,val2) or JSON format for nested data structures (a dictionary or list of dictionaries accepted).
         :type value: str
         """
         self.attributes['Ansible Config 2G.Script Parameters'] = value
@@ -284,7 +284,7 @@ class AnsibleConfig2G(object):
     @inventory_groups.setter
     def inventory_groups(self, value):
         """
-        (Optional) Designating groups in playbook to be executed.
+        (Optional) Designating groups in playbook to be executed. This value will be broadcast to connected hosts. Host level value can over-ride.
         :type value: str
         """
         self.attributes['Ansible Config 2G.Inventory Groups'] = value
@@ -344,10 +344,25 @@ class AnsibleConfig2G(object):
     @ansible_config_selector.setter
     def ansible_config_selector(self, value):
         """
-        (Optional) As alternative to connectors, match this attribute with target resources. Similar to Execution Server Selector Workflow.
+        (Optional) An alternative to connectors. Create and match this attribute value on target resources. Both matching selector and connected resources will run together.
         :type value: str
         """
         self.attributes['Ansible Config 2G.Ansible Config Selector'] = value
+
+    @property
+    def only_inventory_groups(self):
+        """
+        :rtype: bool
+        """
+        return self.attributes['Ansible Config 2G.Only Inventory Groups'] if 'Ansible Config 2G.Only Inventory Groups' in self.attributes else None
+
+    @only_inventory_groups.setter
+    def only_inventory_groups(self, value=False):
+        """
+        (Optional) Relevant to "inventory" playbook command. False will run playbook against ALL deployed apps. True will target only apps with Inventory Group attribute populated.
+        :type value: bool
+        """
+        self.attributes['Ansible Config 2G.Only Inventory Groups'] = value
 
     @property
     def name(self):

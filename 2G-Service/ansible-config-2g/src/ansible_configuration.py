@@ -1,5 +1,10 @@
 import json
 
+"""
+These data model keys are what is expected by package driver when parsing
+These are same keys that server sends with it's request
+"""
+
 
 class AnsibleConfiguration(object):
     def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes = None):
