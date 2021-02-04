@@ -9,7 +9,7 @@ ACCESS_KEY_PARAM = "ACCESS_KEY"
 
 
 class AnsibleConfiguration(object):
-    def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes = None):
+    def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
         """
         :type playbook_repo: PlaybookRepository
         :type hosts_conf: list[HostConfiguration]
@@ -85,7 +85,8 @@ class AnsibleConfigurationParser(object):
         ansi_conf.timeout_minutes = json_obj.get('timeoutMinutes', 0.0)
 
         # if using 2G wrapper service then skip the param override replacement step - all params come from service
-        is_second_gen_service = json_obj.get('isSecondGenService')
+        is_second_gen_service = json_obj.get('isSecondGenService', False)
+        ansi_conf.is_second_gen_service = is_second_gen_service
 
         if json_obj.get('repositoryDetails'):
             ansi_conf.playbook_repo.url = json_obj['repositoryDetails'].get('url')
@@ -105,7 +106,8 @@ class AnsibleConfigurationParser(object):
                 all_params_dict = dict((i['name'], i['value']) for i in json_host['parameters'])
                 host_conf.parameters = all_params_dict
 
-                # CONSIDERING TO DEPRECATE THIS PARTICULAR OVERRIDE FEATURE COMPLETELY
+                # CONSIDERING TO DEPRECATE THIS OVERRIDE FEATURE COMPLETELY AS IT OPENS POTENTIAL FOR BUGS
+                # PLAYBOOKS WITH MULTIPLE HOSTS CAN'T LOCICALLY OVERRIDE THE SINGLETON SCRIPT URL PARAMS
                 # if not is_second_gen_service:
                     # 2G service doesn't need override logic, this is only relevant for default flow
                     # ansi_conf = over_ride_defaults(ansi_conf, all_params_dict, host_index)

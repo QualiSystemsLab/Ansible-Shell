@@ -1,11 +1,16 @@
 import json
 
+"""
+These data model keys are what is expected by package driver when parsing
+These are same keys that server sends with it's request
+"""
 
-class AnsibleConfiguration(object):
+
+class AnsibleConfigurationRequest2G(object):
     def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes = None):
         """
         :type playbook_repo: PlaybookRepository
-        :type hosts_conf: list[HostConfiguration]
+        :type hosts_conf: list[HostConfigurationRequest2G]
         :type additional_cmd_args: str
         :type timeout_minutes: float
         """
@@ -27,7 +32,7 @@ class PlaybookRepository(object):
         self.password = None
 
 
-class HostConfiguration(object):
+class HostConfigurationRequest2G(object):
     def __init__(self):
         self.ip = None
         self.connectionMethod = None

@@ -1,12 +1,10 @@
 import json
 from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
 from cloudshell.shell.core.resource_driver_interface import ResourceDriverInterface
-from cloudshell.shell.core.driver_context import InitCommandContext, ResourceCommandContext, AutoLoadResource, \
-    AutoLoadAttribute, AutoLoadDetails, CancellationContext
+from cloudshell.shell.core.driver_context import InitCommandContext, ResourceCommandContext, CancellationContext
 
 from ansible_config_from_cached_json import get_cached_ansible_config_from_json, get_cached_repo_data, \
     get_cached_inventory_groups, PlaybookRepository
-from data_model import *  # run 'shellfoundry generate' to generate data model classes
 from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionContext
 from cloudshell.shell.core.driver_context import Connector
 from cloudshell.cm.ansible.ansible_shell import AnsibleShell
@@ -17,16 +15,21 @@ from helper_code.parse_script_params import build_params_list
 from helper_code.gitlab_api_url_validator import is_base_path_gitlab_api
 from helper_code.validate_protocols import is_path_supported_protocol
 from cloudshell.core.logger.qs_logger import get_qs_logger
-from ansible_configuration import AnsibleConfiguration, HostConfiguration
+from ansible_configuration_request import AnsibleConfigurationRequest2G, HostConfigurationRequest2G
 from get_resource_from_context import get_resource_from_context
 
-# HOST OVERRIDE PARAMS - IF PRESENT ON RESOURCE THEY WILL OVERRIDE THE SERVICE DEFAULT
-# TO BE CREATED IN SYSTEM AS GLOBAL ATTRIBUTES
+# HOST LOGICAL RESOURCE OVERRIDE PARAMS - IF PRESENT ON RESOURCE THEY WILL OVERRIDE THE SERVICE DEFAULT
+# TO BE CREATED IN SYSTEM AS GLOBAL ATTRIBUTES AND ATTACHED TO APP MODEL
 ACCESS_KEY_PARAM = "Access Key"
 CONNECTION_METHOD_PARAM = "Connection Method"
 SCRIPT_PARAMS_PARAM = "Script Parameters"
 INVENTORY_GROUP_PARAM = "Inventory Groups"
 CONNECTION_SECURED_PARAM = "Connection Secured"
+
+
+# USER PLAYBOOK OVERRIDE PARAMS
+USER_PB_CONNECTION_METHOD_PARAM = "CONNECTION_METHOD"
+USER_PB_INVENTORY_GROUP_PARAM = "INVENTORY_GROUPS"
 
 
 class AnsibleConfig2GDriver(ResourceDriverInterface):
@@ -51,6 +54,8 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         """
         :param ResourceCommandContext context:
         :param CancellationContext cancellation_context:
+        :param str playbook_path:
+        :param str script_params:
         :return:
         """
         api = CloudShellSessionContext(context).get_api()
@@ -105,8 +110,10 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             try:
                 resource_details = api.GetResourceDetails(name)
             except Exception as e:
-                exc_msg = "'{}' Input Error. '{}' is not a resource. Must connect to root resource".format(service_name,
-                                                                                                           name)
+                exc_msg = "'{}' Input Error. '{}' is not a resource. Must connect to root resource: {}".format(
+                    service_name,
+                    name,
+                    str(e))
                 reporter.err_out(exc_msg)
                 raise Exception(exc_msg)
             resources.append(resource_details)
@@ -117,6 +124,9 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         """
         :param ResourceCommandContext context:
         :param CancellationContext cancellation_context:
+        :param str infrastructure_resources:
+        :param str playbook_path:
+        :param str script_params:
         :return:
         """
         api = CloudShellSessionContext(context).get_api()
@@ -158,7 +168,9 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
     @staticmethod
     def _get_inventory_resources(api, res_id, inventory_only_bool):
         """
-
+        find resources for "global" playbook execution. run against all resources without connections
+        inventory_only boolean targets only the resources with "inventory groups" populated.
+        This can come from resource attribute, or custom param value on cached user playbook data
         :param CloudShellAPISession api:
         :param str res_id:
         :param bool inventory_only_bool:
@@ -339,6 +351,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
     def _get_ansible_config_json(self, context, api, reporter, playbook_path, script_params,
                                  supplied_resources=None, is_global_inventory_cmd=False):
         """
+        Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
         :param ResourceCommandContext context:
         :param SandboxReporter reporter:
         :param list[ResourceInfo] supplied_resources: resources obtained from method other than connectors logic
@@ -361,6 +374,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         Infrastructure resource command + Inventory Command will ignore the connectors and linked attribute resources
         They pass in their own 'supplied_resources'
         Connector + attribute linked resources will be merged into a set and run together
+        the resolved list of target_host_resources is what determines the target of the ansible playbook
         """
 
         # get host details from connectors
@@ -390,7 +404,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             target_host_resources = [api.GetResourceDetails(x) for x in target_host_resource_names]
 
         # INITIALIZE DATA MODEL AND START POPULATING
-        ansi_conf = AnsibleConfiguration()
+        ansi_conf = AnsibleConfigurationRequest2G()
         ansi_conf.additionalArgs = service_additional_args if service_additional_args else None
         ansi_conf.timeoutMinutes = int(service_timeout_minutes) if service_timeout_minutes else 0
 
@@ -429,7 +443,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
                 cached_repo_data = get_cached_repo_data(cached_ansible_conf)
 
             # START BUILDING REQUEST
-            host_conf = HostConfiguration()
+            host_conf = HostConfigurationRequest2G()
             host_conf.ip = curr_resource_obj.Address
             attrs = curr_resource_obj.ResourceAttributes
 
@@ -444,14 +458,14 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             # OVERRIDE SERVICE ATTRIBUTES IF ATTRIBUTES EXIST ON RESOURCE
             # ACCESS KEY
             access_key_attr = get_resource_attribute_gen_agostic(ACCESS_KEY_PARAM, attrs)
-            encrypted_acces_key_val = access_key_attr.Value if access_key_attr else None
-            host_conf.accessKey = encrypted_acces_key_val
+            encrypted_access_key_val = access_key_attr.Value if access_key_attr else None
+            host_conf.accessKey = encrypted_access_key_val
 
             # VALIDATE HOST CREDENTIALS - NEED USER AND PASSWORD/ACCESS KEY
             if user_attr_val:
                 decrypted_password = api.DecryptPassword(encrypted_password_val).Value
-                if encrypted_acces_key_val:
-                    decrypted_access_key = api.DecryptPassword(encrypted_acces_key_val).Value
+                if encrypted_access_key_val:
+                    decrypted_access_key = api.DecryptPassword(encrypted_access_key_val).Value
                 else:
                     decrypted_access_key = None
                 if not decrypted_password and not decrypted_access_key:
@@ -463,7 +477,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             cached_inventory_groups_str = get_cached_inventory_groups(cached_ansible_conf) \
                 if cached_ansible_conf else None
 
-            # FOR CONNNECTORS FLOW SERVICE VALUE BROADCASTS, FOR 'GLOBAL' INVENTORY COMMAND NOT DESIRED BEHAVIOR
+            # FOR CONNECTORS FLOW SERVICE VALUE BROADCASTS, FOR 'GLOBAL' INVENTORY COMMAND NOT DESIRED BEHAVIOR
             resource_ansible_group_attr = get_resource_attribute_gen_agostic(INVENTORY_GROUP_PARAM, attrs)
             if resource_ansible_group_attr:
                 if resource_ansible_group_attr.Value:
@@ -490,16 +504,32 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
             host_conf.groups = inventory_groups_list
 
             # CONNECTION METHOD
-            resource_connection_method = None
+            """ 
+            PRIORITY: 
+            1. populated resource attribute 
+            2. cached user playbook connection method 
+            3. default mgmt playbook connection method 
+            4. 2G service value as fallback
+            only way to override cached app value is with resource attribute 
+            """
+            resource_attr_connection_method = None
             connection_method_attr = get_resource_attribute_gen_agostic(CONNECTION_METHOD_PARAM, attrs)
             if connection_method_attr:
                 connection_val = connection_method_attr.Value
                 if connection_val:
                     if connection_val.lower() not in ["na", "n/a"]:
-                        resource_connection_method = connection_val
+                        resource_attr_connection_method = connection_val
 
-            if resource_connection_method:
-                host_conf.connectionMethod = resource_connection_method
+            if resource_attr_connection_method:
+                host_conf.connectionMethod = resource_attr_connection_method
+            elif cached_ansible_conf:
+                cached_params_dict = cached_ansible_conf.hosts_conf[0].parameters
+                cached_user_pb_connection_method = cached_params_dict.get(USER_PB_CONNECTION_METHOD_PARAM)
+                cached_mgmt_pb_connection_method = cached_ansible_conf.hosts_conf[0].connection_method
+                if cached_user_pb_connection_method:
+                    host_conf.connectionMethod = cached_user_pb_connection_method
+                elif cached_mgmt_pb_connection_method:
+                    host_conf.connectionMethod = cached_mgmt_pb_connection_method
             else:
                 host_conf.connectionMethod = service_connection_method
 
@@ -540,6 +570,8 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
                 host_conf.parameters.extend(cached_params_list)
 
             ansi_conf.hostsDetails.append(host_conf)
+
+        """ EXITING THE GIANT FOR LOOP """
 
         # REPO DETAILS
         repo_url, is_cached_url = self._build_repo_url(resource, playbook_path, cached_repo_data, reporter)

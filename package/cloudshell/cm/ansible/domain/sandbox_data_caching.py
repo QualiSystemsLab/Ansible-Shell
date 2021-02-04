@@ -1,4 +1,4 @@
-from cloudshell.api.cloudshell_api import CloudShellAPISession, SandboxDataKeyValue
+from cloudshell.api.cloudshell_api import CloudShellAPISession, SandboxDataKeyValue, ResourceInfo
 from ansible_configuration import AnsibleConfiguration
 from cloudshell.shell.core.driver_context import ResourceCommandContext
 import copy
@@ -6,9 +6,8 @@ import copy
 
 def _get_resource_name_from_ip(resources, ansi_conf_ip):
     """
-    :param CloudShellAPISessionapi:
     :param str res_id:
-    :param str ip:
+    :param str ansi_conf_ip:
     :return:
     """
     matching_resource_search = [x for x in resources if x.FullAddress == ansi_conf_ip]
@@ -22,7 +21,8 @@ def _get_resource_name_from_ip(resources, ansi_conf_ip):
 
 def _cache_host_data_to_sandbox(api, res_id, sandbox_resources, ansi_conf, logger):
     """
-    cache params in sandbox data, if key exists then return
+    cache params in sandbox data, if key exists then return (to make re-run of setup idempotent)
+    store each host separately with the resource name as sandbox data key
     :param CloudShellAPISession api:
     :param ResourceCommandContext context:
     :param AnsibleConfiguration ansi_conf:
@@ -56,7 +56,7 @@ def cache_data_and_merge_global_inputs(api, context, ansi_conf, logger):
     this method will cache host data to sandbox then merge global inputs to host vars list
     :param CloudShellAPISession api:
     :param ResourceCommandContext context:
-    :param AnsibleConfiguration ansi_conf:
+    :param AnsibleConfigurationRequest2G ansi_conf:
     :return same config object:
     :rtype AnsibleConfiguration
     """
@@ -64,7 +64,8 @@ def cache_data_and_merge_global_inputs(api, context, ansi_conf, logger):
     sandbox_details = api.GetReservationDetails(res_id, True).ReservationDescription
     sb_resources = sandbox_details.Resources
 
-    _cache_host_data_to_sandbox(api, res_id, sb_resources, ansi_conf, logger)
+    if not ansi_conf.is_second_gen_service:
+        _cache_host_data_to_sandbox(api, res_id, sb_resources, ansi_conf, logger)
 
     sb_global_inputs = api.GetReservationInputs(res_id).GlobalInputs
 
