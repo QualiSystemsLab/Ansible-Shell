@@ -3,7 +3,7 @@ tosca_definitions_version: tosca_simple_yaml_1_0
 metadata:
   template_name: Ansible Config 2G
   template_author: Quali
-  template_version: 2.0.1
+  template_version: 2.0.2
   template_icon: shell-icon.png
 
 description: >
@@ -53,7 +53,7 @@ node_types:
         type: string
         tags: [ user_input ]
       Inventory Groups:
-        description: (Optional) Designating groups in playbook to be executed. This value will be broadcast to connected hosts. Host level value can over-ride.
+        description: (Optional) On LINKED playbook, this value will BROADCAST to connected resources (app level value overrides). For non-linked GLOBAL playbook, this will add MATCHING app-level Inventory Group values to target host list. The matching logic is by substring - if service value is contained in app level value.
         type: string
         tags: [ user_input ]
       Ansible CMD Args:
@@ -74,7 +74,7 @@ node_types:
         type: string
         tags: [ user_input ]
       Only Inventory Groups:
-        description: (Optional) Relevant to "inventory" playbook command. False will run playbook against ALL deployed apps. True will target only apps with Inventory Group attribute populated.
+        description: (Optional) Currently Deprecated.
         type: boolean
         default: false
         tags: [ user_input ]

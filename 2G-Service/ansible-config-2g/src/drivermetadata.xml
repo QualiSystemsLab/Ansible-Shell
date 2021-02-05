@@ -20,6 +20,16 @@
                                Mandatory="False"/>
                 </Parameters>
             </Command>
+            <Command
+                    Description="Runs User Defined Playbook. Playbook and params will be read from cached values in sandbox data store. Target Resource determined by Service Alias or connector link."
+                    EnableCancellation="true"
+                    Name="execute_cached_user_playbook" DisplayName="Execute User Playbook">
+            </Command>
+            <Command
+                    Description="Runs Stored MGMT Defined Playbook. Playbook and params will be read from cached values in sandbox data store. Target Resource determined connector link only."
+                    EnableCancellation="true"
+                    Name="execute_cached_mgmt_playbook" DisplayName="Execute MGMT Playbook">
+            </Command>
         </Category>
         <Command Description="Execute playbook on connected resources." EnableCancellation="true"
                  Name="execute_playbook" DisplayName="Execute Playbook">
