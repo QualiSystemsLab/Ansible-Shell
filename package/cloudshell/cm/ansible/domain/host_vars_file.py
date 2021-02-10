@@ -1,7 +1,7 @@
 import os
 from logging import Logger
 from file_system_service import FileSystemService
-from Helpers.build_ansible_list_var import build_json_to_yaml, params_list_to_yaml, build_simple_list_from_comma_separated
+from Helpers.build_ansible_list_var import params_list_to_yaml, build_simple_list_from_comma_separated
 
 
 class HostVarsFile(object):

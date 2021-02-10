@@ -2,6 +2,7 @@ import os
 from Queue import Queue, Empty
 from threading import Thread, RLock
 
+
 class StreamAccumulator(object):
     def __init__(self, stdout):
         self.queue = Queue()

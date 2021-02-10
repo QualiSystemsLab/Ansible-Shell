@@ -20,9 +20,9 @@ from cloudshell.core.context.error_handling_context import ErrorHandlingContext
 from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionContext
 from cloudshell.shell.core.session.logging_session import LoggingSessionContext
 from domain.models import HttpAuth
-from cloudshell.api.cloudshell_api import CloudShellAPISession
 from cloudshell.shell.core.driver_context import ResourceCommandContext
 from domain.sandbox_data_caching import cache_data_and_merge_global_inputs
+
 
 class AnsibleShell(object):
     INVENTORY_FILE_NAME = 'hosts'

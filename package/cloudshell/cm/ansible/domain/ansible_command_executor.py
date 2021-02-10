@@ -74,7 +74,6 @@ class AnsibleCommandExecutor(object):
 
         return all_txt_out, all_txt_err
 
-
     def _create_shell_command(self, playbook_file, inventory_file, args):
         command = "ansible"
 

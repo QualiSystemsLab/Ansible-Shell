@@ -16,7 +16,7 @@
                 </Parameters>
             </Command>
         </Category>
-        <Category Name="Infrastructure Commands">
+        <Category Name="Admin Commands">
             <Command
                     Description="Execute playbook on any cloudshell resources by passing resource name. Can be on any resource outside of sandbox."
                     EnableCancellation="true"
@@ -35,6 +35,16 @@
                                Description='Variables passed to HOST_VARS file. Can pass simple arguments in this format (ansible_var1,val1;ansible_var2,val2). Use JSON for lists and hashes.{"var1": ["val1", "val2"]})'
                                Mandatory="False"/>
                 </Parameters>
+            </Command>
+             <Command
+                    Description="Runs User Defined Playbook. Playbook and params will be read from cached values in sandbox data store. Target Resource determined by Service Alias or connector link."
+                    EnableCancellation="true"
+                    Name="execute_cached_user_playbook" DisplayName="Execute User Playbook">
+            </Command>
+            <Command
+                    Description="Runs Stored MGMT Defined Playbook. Playbook and params will be read from cached values in sandbox data store. Target Resource determined connector link only."
+                    EnableCancellation="true"
+                    Name="execute_cached_mgmt_playbook" DisplayName="Execute MGMT Playbook">
             </Command>
         </Category>
     </Layout>
