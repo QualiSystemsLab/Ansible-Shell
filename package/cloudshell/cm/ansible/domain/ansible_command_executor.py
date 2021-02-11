@@ -10,6 +10,7 @@ from cloudshell.cm.ansible.domain.output.unixToHtmlConverter import UnixToHtmlCo
 from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult
 from cloudshell.shell.core.context import ResourceCommandContext
 from cloudshell.cm.ansible.domain.stdout_accumulator import StdoutAccumulator, StderrAccumulator
+from Helpers.html_print_wrappers import warn_span
 
 
 class AnsibleCommandExecutor(object):
@@ -27,9 +28,13 @@ class AnsibleCommandExecutor(object):
         :rtype: AnsibleResult
         """
         shell_command = self._create_shell_command(playbook_file, inventory_file, args)
+        converter = UnixToHtmlColorConverter()
 
         logger.info('Running cmd \'%s\' ...' % shell_command)
         start_time = time.time()
+        curr_minutes_counter = 0
+        output_writer.write("Running Playbook '{}'...".format(playbook_file))
+
         process = Popen(shell_command, shell=True, stdout=PIPE, stderr=PIPE)
         all_txt_err = ''
         all_txt_out = ''
@@ -46,6 +51,32 @@ class AnsibleCommandExecutor(object):
                     if txt_out:
                         all_txt_out += txt_out
                         txt_lines.append(txt_out)
+
+                    elapsed = time.time() - start_time
+                    elapsed_minutes = int(elapsed / 60)
+
+                    # INCREMENT COUNTER EVERY MINUTE
+                    if elapsed_minutes > curr_minutes_counter:
+                        curr_minutes_counter += 1
+                        # DUMP OUTPUT EVERY FIVE MINUTES TO CONSOLE
+                        if curr_minutes_counter % 2 == 0:
+                            msg = "Playbook '{}' has been running for: {} minutes".format(playbook_file,
+                                                                                          curr_minutes_counter)
+                            output_writer.write(msg)
+                            logger.info(msg)
+
+                        # DUMP OUTPUT EVERY FIVE MINUTES TO CONSOLE
+                        if curr_minutes_counter % 5 == 0:
+                            playbook_output = self._convert_text(playbook_file, txt_lines, converter, output_writer,
+                                                                 logger)
+                            header = warn_span("===== Playbook '{}' output after {} minutes =====".format(playbook_file,
+                                                                                                          curr_minutes_counter))
+                            separator = warn_span("============================================================")
+                            output_msg = "\n{}\n{}{}".format(header,
+                                                             playbook_output,
+                                                             separator)
+                            output_writer.write(output_msg)
+
                     if process.poll() is not None:
                         break
                     if cancel_sampler.is_cancelled():
@@ -53,7 +84,6 @@ class AnsibleCommandExecutor(object):
                         cancel_sampler.throw()
                     time.sleep(2)
 
-                converter = UnixToHtmlColorConverter()
                 try:
                     full_output = converter.convert(os.linesep.join(txt_lines))
                     full_output = converter.remove_strike(full_output)
@@ -67,10 +97,11 @@ class AnsibleCommandExecutor(object):
         elapsed = time.time() - start_time
         err_line_count = len(all_txt_err.split(os.linesep))
         out_line_count = len(all_txt_out.split(os.linesep))
-        logger.info('Done (after \'%s\' sec, with %s lines of output, with %s lines of error).' % (elapsed, out_line_count, err_line_count))
-        logger.debug('Err: '+all_txt_err)
-        logger.debug('Out: '+all_txt_out)
-        logger.debug('Code: '+str(process.returncode))
+        logger.info('Done (after \'%s\' sec, with %s lines of output, with %s lines of error).' % (
+            elapsed, out_line_count, err_line_count))
+        logger.debug('Err: ' + all_txt_err)
+        logger.debug('Out: ' + all_txt_out)
+        logger.debug('Code: ' + str(process.returncode))
 
         return all_txt_out, all_txt_err
 
@@ -84,6 +115,17 @@ class AnsibleCommandExecutor(object):
         if args:
             command += " " + args
         return command
+
+    @staticmethod
+    def _convert_text(playbook_name, txt_lines, converter, output_writer, logger):
+        try:
+            full_output = converter.convert(os.linesep.join(txt_lines))
+            full_output = converter.remove_strike(full_output)
+            return full_output
+        except:
+            exc_msg = '=== failed to convert playbook output for {} ==='.format(playbook_name)
+            output_writer.write(exc_msg)
+            logger.info(exc_msg)
 
 
 class OutputWriter(object):
@@ -101,7 +143,7 @@ class ReservationOutputWriter(OutputWriter):
         :type command_context: ResourceCommandContext
         """
         self.session = session
-        self.resevation_id = command_context.reservation.reservation_id
+        self.reservation_id = command_context.reservation.reservation_id
 
     def write(self, msg):
-        self.session.WriteMessageToReservationOutput(self.resevation_id, msg)
+        self.session.WriteMessageToReservationOutput(self.reservation_id, msg)
