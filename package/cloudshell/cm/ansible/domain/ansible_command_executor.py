@@ -85,9 +85,13 @@ class AnsibleCommandExecutor(object):
                     time.sleep(2)
 
                 try:
+                    elapsed = time.time() - start_time
+                    elapsed_total_minutes = int(elapsed / 60)
                     full_output = converter.convert(os.linesep.join(txt_lines))
                     full_output = converter.remove_strike(full_output)
-                    output_writer.write(full_output)
+                    header_msg = warn_span("===== Playbook '{}' DONE after {} minutes =====".format(playbook_file, elapsed_total_minutes))
+                    separator = warn_span("============================================================")
+                    output_writer.write("{}\n{}\n{}".format(header_msg, full_output, separator))
                     logger.error(full_output)
                 except Exception as e:
                     output_writer.write('failed to write text of %s characters (%s)' % (len(full_output), e))

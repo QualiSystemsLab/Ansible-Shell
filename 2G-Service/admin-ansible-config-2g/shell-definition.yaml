@@ -78,6 +78,10 @@ node_types:
         type: boolean
         default: false
         tags: [ user_input ]
+      Config Order:
+        description: (Optional) Assign an integer to determine configuration order. Services with same number deploy concurrently in same 'stage'. Leave empty to be run last.
+        type: string
+        tags: [ user_input ]
       Service Categories:
         type: list
         default: [ Configuration Management ]
