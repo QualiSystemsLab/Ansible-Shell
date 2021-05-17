@@ -25,7 +25,7 @@ class PlaybookRepository(object):
         self.url = None
         self.username = None
         self.password = None
-
+        self.token = None
 
 class HostConfiguration(object):
     def __init__(self):

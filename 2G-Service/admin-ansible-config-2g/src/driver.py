@@ -344,6 +344,8 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
         ansi_conf.repositoryDetails.username = resource.repo_user
         password_val = api.DecryptPassword(resource.repo_password).Value
         ansi_conf.repositoryDetails.password = password_val if password_val else None
+        enc_token = resource.repo_token
+        ansi_conf.repositoryDetails.token = api.DecryptPassword(enc_token).Value
 
         # START POPULATING HOSTS
         missing_credential_hosts = []
@@ -444,10 +446,13 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
         # hide repo password in json printout
         new_obj = json.loads(ansi_conf_json)
         curr_password = new_obj["repositoryDetails"]["password"]
+        curr_token = new_obj["repositoryDetails"]["token"]
         if curr_password:
             new_obj["repositoryDetails"]["password"] = "*******"
+        if curr_token :
+            new_obj["repositoryDetails"]["token"] = "*******"
         json_copy = json.dumps(new_obj, indent=4)
-        reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
+      #  reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
 
         return ansi_conf_json
 

@@ -200,6 +200,21 @@ class AnsibleConfig2G(object):
         self.attributes['Ansible Config 2G.Repo Password'] = value
 
     @property
+    def repo_token(self):
+        """
+        :rtype: string
+        """
+        return self.attributes['Ansible Config 2G.Repo Token'] if 'Ansible Config 2G.Repo Token' in self.attributes else None
+
+    @repo_token.setter
+    def repo_token(self, value):
+        """
+        (Optional) Source Control Token for private repo authentication. For GitLab, add private access token here.
+        :type value: string
+        """
+        self.attributes['Ansible Config 2G.Repo Token'] = value
+
+    @property
     def playbook_base_path(self):
         """
         :rtype: str
@@ -269,7 +284,7 @@ class AnsibleConfig2G(object):
     @script_parameters.setter
     def script_parameters(self, value):
         """
-        (Optional) key pair values passed playbook VARS file to be accesible in script. Pass in following format - key1,val1;key2,val2.
+        (Optional) key pair values passed to HOST_VARS. Can pass simple arguments in this format (ansible_var1,val1;ansible_var2,val2) or JSON format for nested data structures (a dictionary or list of dictionaries accepted).
         :type value: str
         """
         self.attributes['Ansible Config 2G.Script Parameters'] = value
@@ -344,7 +359,7 @@ class AnsibleConfig2G(object):
     @ansible_config_selector.setter
     def ansible_config_selector(self, value):
         """
-        (Optional) As alternative to connectors, match this attribute with target resources. Similar to Execution Server Selector Workflow.
+        (Optional) An alternative to connectors. Create and match this attribute value on target resources. Both matching selector and connected resources will run together.
         :type value: str
         """
         self.attributes['Ansible Config 2G.Ansible Config Selector'] = value

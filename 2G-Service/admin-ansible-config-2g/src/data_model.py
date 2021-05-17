@@ -200,6 +200,21 @@ class AdminAnsibleConfig2G(object):
         self.attributes['Admin Ansible Config 2G.Repo Password'] = value
 
     @property
+    def repo_token(self):
+        """
+        :rtype: string
+        """
+        return self.attributes['Admin Ansible Config 2G.Repo Token'] if 'Admin Ansible Config 2G.Repo Token' in self.attributes else None
+
+    @repo_token.setter
+    def repo_token(self, value):
+        """
+        (Optional) Source Control Token for private repo authentication. For GitLab, add private access token here.
+        :type value: string
+        """
+        self.attributes['Admin Ansible Config 2G.Repo Token'] = value
+
+    @property
     def playbook_base_path(self):
         """
         :rtype: str
