@@ -1,7 +1,6 @@
 import os
 from logging import Logger
-from file_system_service import FileSystemService
-from Helpers.build_ansible_list_var import build_json_to_yaml, params_list_to_yaml, build_simple_list_from_comma_separated
+from .file_system_service import FileSystemService
 
 
 class HostVarsFile(object):
@@ -28,20 +27,15 @@ class HostVarsFile(object):
         self.logger.info('Creating \'%s\' vars file ...' % self.file_path)
         return self
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
+
+    def __exit__(self, type, value, traceback):
         if not self.file_system.exists(HostVarsFile.FOLDER_NAME):
             self.file_system.create_folder(HostVarsFile.FOLDER_NAME)
         with self.file_system.create_file(self.file_path) as file_stream:
             lines = ['---']
-            for key, value in sorted(self.vars.iteritems()):
-                if type(value) == list or type(value) == dict:
-                    lines.append(params_list_to_yaml(key, value))
-                elif "," in value:
-                    lines.append(build_simple_list_from_comma_separated(key, value))
-                else:
-                    lines.append(str(key) + ': ' + str(value))
-            file_stream.write(os.linesep.join(lines))
-            self.logger.debug(os.linesep.join(lines))
+            for key, value in sorted(self.vars.items()):
+                lines.append(str(key) + ': "' + str(value) + '"')
+            file_stream.write(bytes(os.linesep.join(lines), 'utf-8'))
         self.logger.info('Done.')
 
     def add_vars(self, vars):
@@ -60,11 +54,10 @@ class HostVarsFile(object):
         self.vars[HostVarsFile.ANSIBLE_PASSWORD] = password
 
     def add_port(self, port):
-        if HostVarsFile.ANSIBLE_PORT not in self.vars.keys() or \
+        if HostVarsFile.ANSIBLE_PORT not in list(self.vars.keys()) or \
                 (self.vars[HostVarsFile.ANSIBLE_PORT] == '') or \
                         self.vars[HostVarsFile.ANSIBLE_PORT] is None:
             self.vars[HostVarsFile.ANSIBLE_PORT] = port
 
     def add_ignore_winrm_cert_validation(self):
         self.vars[HostVarsFile.ANSIBLE_WINRM_CERT_VALIDATION] = 'ignore'
-

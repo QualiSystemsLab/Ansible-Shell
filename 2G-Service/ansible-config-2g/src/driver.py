@@ -17,6 +17,7 @@ from cloudshell.core.logger.qs_logger import get_qs_logger
 from ansible_configuration import AnsibleConfiguration, HostConfiguration
 from get_resource_from_context import get_resource_from_context
 
+
 # HOST OVERRIDE PARAMS - IF PRESENT ON RESOURCE THEY WILL OVERRIDE THE SERVICE DEFAULT
 # TO BE CREATED IN SYSTEM AS GLOBAL ATTRIBUTE
 ACCESS_KEY_PARAM = "Access Key"

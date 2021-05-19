@@ -6,20 +6,19 @@ from cloudshell.cm.ansible.domain.connection_service import ConnectionService
 from cloudshell.cm.ansible.domain.exceptions import AnsibleException
 from cloudshell.cm.ansible.domain.ansible_command_executor import AnsibleCommandExecutor, ReservationOutputWriter
 from cloudshell.cm.ansible.domain.ansible_config_file import AnsibleConfigFile
-from cloudshell.cm.ansible.domain.ansible_configuration import AnsibleConfigurationParser, AnsibleConfiguration
+from cloudshell.cm.ansible.domain.ansible_configuration import AnsibleConfigurationParser
 from cloudshell.cm.ansible.domain.file_system_service import FileSystemService
 from cloudshell.cm.ansible.domain.filename_extractor import FilenameExtractor
 from cloudshell.cm.ansible.domain.host_vars_file import HostVarsFile
 from cloudshell.cm.ansible.domain.http_request_service import HttpRequestService
 from cloudshell.cm.ansible.domain.inventory_file import InventoryFile
 from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult
-from cloudshell.cm.ansible.domain.playbook_downloader import PlaybookDownloader
+from cloudshell.cm.ansible.domain.playbook_downloader import PlaybookDownloader, HttpAuth
 from cloudshell.cm.ansible.domain.temp_folder_scope import TempFolderScope
 from cloudshell.cm.ansible.domain.zip_service import ZipService
 from cloudshell.core.context.error_handling_context import ErrorHandlingContext
 from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionContext
 from cloudshell.shell.core.session.logging_session import LoggingSessionContext
-from domain.models import HttpAuth
 
 
 class AnsibleShell(object):
@@ -33,6 +32,7 @@ class AnsibleShell(object):
         :type playbook_executor: AnsibleCommandExecutor
         :type session_provider: CloudShellSessionProvider
         """
+
         http_request_service = http_request_service or HttpRequestService()
         zip_service = zip_service or ZipService()
         self.file_system = file_system or FileSystemService()
@@ -51,7 +51,7 @@ class AnsibleShell(object):
         :rtype str
         """
         with LoggingSessionContext(command_context) as logger:
-            logger.info('\'execute_playbook\' is called with the configuration json: \n' + ansi_conf_json)
+            logger.debug('\'execute_playbook\' is called with the configuration json: \n' + ansi_conf_json)
 
             with ErrorHandlingContext(logger):
                 with CloudShellSessionContext(command_context) as api:
@@ -106,7 +106,7 @@ class AnsibleShell(object):
                     file.add_password(host_conf.password)
                 else:
                     file_name = host_conf.ip + '_access_key.pem'
-                    with self.file_system.create_file(file_name, 0400) as file_stream:
+                    with self.file_system.create_file(file_name, 0o400) as file_stream:
                         file_stream.write(host_conf.access_key)
                     file.add_conn_file(file_name)
 
@@ -118,9 +118,15 @@ class AnsibleShell(object):
         :rtype str
         """
         repo = ansi_conf.playbook_repo
-        # we need password field to be passed for gitlab auth tokens (which require token and not user)
-        auth = HttpAuth(repo.username, repo.password) if repo.password else None
-        playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, auth, logger, cancellation_sampler)
+        auth = None
+        if ansi_conf.playbook_repo.username or ansi_conf.playbook_repo.token:
+            auth = HttpAuth(repo.username, repo.password, repo.token)
+
+        logger.info('Verify certificate: ' + str(ansi_conf.verify_certificate))
+        playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, 
+                                            auth, logger, cancellation_sampler, 
+                                            ansi_conf.verify_certificate)
+        logger.info('download playbook file' + str(playbook_name))
         return playbook_name
 
     def _run_playbook(self, ansi_conf, playbook_name, output_writer, cancellation_sampler, logger):
@@ -158,7 +164,7 @@ class AnsibleShell(object):
             logger.info("Trying to connect to host:" + host.ip)
             ansible_port = self.ansible_connection_helper.get_ansible_port(host)
 
-            if HostVarsFile.ANSIBLE_PORT in host.parameters.keys() and (
+            if HostVarsFile.ANSIBLE_PORT in list(host.parameters.keys()) and (
                     host.parameters[HostVarsFile.ANSIBLE_PORT] != '' and
                     host.parameters[HostVarsFile.ANSIBLE_PORT] is not None):
                 ansible_port = host.parameters[HostVarsFile.ANSIBLE_PORT]

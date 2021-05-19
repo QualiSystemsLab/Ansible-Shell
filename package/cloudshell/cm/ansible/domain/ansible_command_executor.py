@@ -8,7 +8,6 @@ import re
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
 from cloudshell.cm.ansible.domain.output.unixToHtmlConverter import UnixToHtmlColorConverter
 from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult
-from cloudshell.shell.core.context import ResourceCommandContext
 from cloudshell.cm.ansible.domain.stdout_accumulator import StdoutAccumulator, StderrAccumulator
 
 
@@ -20,7 +19,7 @@ class AnsibleCommandExecutor(object):
         """
         :type playbook_file: str
         :type inventory_file: str
-        :type args: str
+        :type args: list[str]
         :type logger: Logger
         :type output_writer: OutputWriter
         :type cancel_sampler: CancellationSampler
