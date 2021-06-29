@@ -45,6 +45,32 @@
 2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "value": ""
 2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             }
 2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           ]
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook         },
+{
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           "ip": "192.168.42.197",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           "username": "quali",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           "password": "P0G8gOpDHL0c52ROLdsaVQ==",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           "accessKey": "",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           "connectionMethod": "SSH",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           "groups": null,
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           "parameters": [
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             {
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "name": "REPO_URL",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "value": ""
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             },
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             {
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "name": "REPO_USER",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "value": ""
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             },
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             {
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "name": "REPO_PASSWORD",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "value": ""
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             },
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             {
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "name": "CONNECTION_METHOD",
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook               "value": ""
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook             }
+2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook           ]
 2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook         }
 2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook       ],
 2020-12-28 19:06:43,735 [DEBUG]: QS.AnsibleService_B6AF ansible_shell - execute_playbook       "printOutput": true
@@ -80,6 +106,8 @@
 2020-12-28 19:06:44,373 [INFO]: QS.AnsibleService_B6AF inventory_file - __enter__            Creating 'hosts' inventory file ...
 2020-12-28 19:06:44,373 [DEBUG]: QS.AnsibleService_B6AF inventory_file - __exit__             [all]
 2020-12-28 19:06:44,373 [DEBUG]: QS.AnsibleService_B6AF inventory_file - __exit__             192.168.42.196
+                                                                                               xxxxx
+                                                                                               xxx
 2020-12-28 19:06:44,373 [INFO]: QS.AnsibleService_B6AF inventory_file - __exit__             Done (1 groups, with 1 hosts).
 2020-12-28 19:06:44,374 [INFO]: QS.AnsibleService_B6AF playbook_downloader - _download            Downloading file from 'http://192.168.85.62/api/v4/projects/3/repository/files/my_playbook.yml/raw?ref=master' ...
 2020-12-28 19:06:44,377 [INFO]: QS.AnsibleService_B6AF http_request_service - _get_gitlab_response downloading script via Gitlab Rest API call: http://192.168.85.62/api/v4/projects/3/repository/files/my_playbook.yml/raw?ref=master

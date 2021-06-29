@@ -23,7 +23,7 @@ class AnsibleResult(object):
 
     def to_json(self):
         arr = [{'host':h.ip,'success':h.success,'error':h.error} for h in self.host_results]
-        return json.dumps(arr)
+        return json.dumps(arr, indent=4)
 
     def _load(self):
         host_results = []

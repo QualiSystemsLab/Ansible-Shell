@@ -3,9 +3,9 @@ import os
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
 from cloudshell.cm.ansible.domain.connection_service import ConnectionService
-from cloudshell.cm.ansible.domain.exceptions import AnsibleException
+from cloudshell.cm.ansible.domain.exceptions import AnsibleDriverException
 from cloudshell.cm.ansible.domain.ansible_command_executor import AnsibleCommandExecutor, ReservationOutputWriter
-from cloudshell.cm.ansible.domain.ansible_config_file import AnsibleConfigFile
+from cloudshell.cm.ansible.domain.ansible_config_file import AnsibleConfigFile, get_user_ansible_cfg_config_keys
 from cloudshell.cm.ansible.domain.ansible_configuration import AnsibleConfigurationParser, AnsibleConfiguration
 from cloudshell.cm.ansible.domain.file_system_service import FileSystemService
 from cloudshell.cm.ansible.domain.filename_extractor import FilenameExtractor
@@ -77,13 +77,15 @@ class AnsibleShell(object):
                         self._wait_for_all_hosts_to_be_deployed(ansi_conf, logger, output_writer)
                         self._add_inventory_file(ansi_conf, logger)
                         playbook_name = self._download_playbook(ansi_conf, cancellation_sampler, logger)
-                        self._run_playbook(ansi_conf, playbook_name, output_writer, cancellation_sampler, logger)
+                        result_json = self._run_playbook(ansi_conf, playbook_name, output_writer, cancellation_sampler, logger)
+                        return result_json
 
     def _add_ansible_config_file(self, logger):
         """
         :type logger: Logger
         """
-        with AnsibleConfigFile(self.file_system, logger) as file:
+        user_ansible_config_keys = get_user_ansible_cfg_config_keys(logger)
+        with AnsibleConfigFile(self.file_system, logger, user_ansible_config_keys) as file:
             file.ignore_ssh_key_checking()
             file.force_color()
             file.set_retry_path("." + os.pathsep)
@@ -150,8 +152,10 @@ class AnsibleShell(object):
             cancellation_sampler)
         ansible_result = AnsibleResult(output, error, [h.ip for h in ansi_conf.hosts_conf])
 
-        if not ansible_result.success:
-            raise AnsibleException(ansible_result.to_json())
+        # swallowing error here
+        # if not ansible_result.success:
+        #     raise AnsibleException(ansible_result.to_json())
+        return ansible_result.to_json()
 
     def _wait_for_all_hosts_to_be_deployed(self, ansi_conf, logger, output_writer):
         """

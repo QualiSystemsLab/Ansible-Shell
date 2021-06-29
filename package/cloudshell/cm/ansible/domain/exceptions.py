@@ -1,4 +1,4 @@
-class AnsibleException(Exception):
+class AnsibleDriverException(Exception):
     pass
 
 

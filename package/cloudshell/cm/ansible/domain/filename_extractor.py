@@ -1,7 +1,7 @@
 import urllib
 import re
 
-from cloudshell.cm.ansible.domain.exceptions import AnsibleException
+from cloudshell.cm.ansible.domain.exceptions import AnsibleDriverException
 
 
 class FilenameExtractor(object):
@@ -46,5 +46,5 @@ class FilenameExtractor(object):
                 if file_name:
                     return file_name.strip()
 
-        raise AnsibleException("playbook file of supported types: '.yml', '.yaml', '.zip' was not found")
+        raise AnsibleDriverException("playbook file of supported types: '.yml', '.yaml', '.zip' was not found")
 
