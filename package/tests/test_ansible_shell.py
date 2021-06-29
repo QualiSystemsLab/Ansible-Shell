@@ -4,7 +4,7 @@ from cloudshell.shell.core.context import ResourceCommandContext, ResourceContex
 
 from cloudshell.cm.ansible.ansible_shell import AnsibleShell
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
-from cloudshell.cm.ansible.domain.exceptions import AnsibleException
+from cloudshell.cm.ansible.domain.exceptions import AnsibleDriverException
 from cloudshell.cm.ansible.domain.ansible_configuration import AnsibleConfiguration, HostConfiguration
 from mock import Mock, patch
 from helpers import mock_enter_exit, mock_enter_exit_self, Any
@@ -220,7 +220,7 @@ class TestAnsibleShell(TestCase):
         self.ansible_result.success = False
         self.ansible_result.to_json = Mock(return_value=json)
 
-        with self.assertRaises(AnsibleException) as e:
+        with self.assertRaises(AnsibleDriverException) as e:
             self._execute_playbook()
         self.assertEqual(json, e.exception.message)
 
