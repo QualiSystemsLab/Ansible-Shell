@@ -89,3 +89,4 @@ The following attributes are supported for over-ride:
 - 25/12/2020 - Added Gitlab Support & Parameter Over-rides
 - 07/01/2021 - Added 2G Service package for physical resources & deployed app resources
 - 17/01/2021 - Added support for Ansible List and Hash Variables (by passing JSON)
+- 16/06/2021 - ansible.cfg merge added

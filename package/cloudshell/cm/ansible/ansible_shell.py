@@ -1,6 +1,7 @@
 import os
 
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
+from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
 from cloudshell.cm.ansible.domain.connection_service import ConnectionService
 from cloudshell.cm.ansible.domain.exceptions import AnsibleDriverException
@@ -21,7 +22,8 @@ from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionCo
 from cloudshell.shell.core.session.logging_session import LoggingSessionContext
 from domain.models import HttpAuth
 from cloudshell.shell.core.driver_context import ResourceCommandContext
-from domain.sandbox_data_caching import cache_data_and_merge_global_inputs
+from domain.sandbox_data_caching import cache_data_and_merge_global_inputs, find_resources_matching_addresses, \
+    cache_host_data_to_sandbox, merge_global_inputs_to_app_params
 
 
 class AnsibleShell(object):
@@ -53,19 +55,35 @@ class AnsibleShell(object):
         :rtype str
         """
         with LoggingSessionContext(command_context) as logger:
-            logger.info('\'execute_playbook\' is called with the configuration json: \n' + ansi_conf_json)
-
             with ErrorHandlingContext(logger):
                 with CloudShellSessionContext(command_context) as api:
+                    logger.info('\'execute_playbook\' is called with the configuration json: \n' + ansi_conf_json)
                     ansi_conf = AnsibleConfigurationParser(api).json_to_object(ansi_conf_json)
 
-                    # this is a branched action with side effect of saving sandbox data
-                    ansi_conf = cache_data_and_merge_global_inputs(api, command_context, ansi_conf, logger)
-                    output_writer = ReservationOutputWriter(api, command_context)
-                    log_msg = "Ansible Config Data Object after global inputs merge:\n{}".format(ansi_conf.get_pretty_json())
-                    logger.info(log_msg)
+                    # sandbox details needed to find resource names not provided by server - needed to set live status
+                    # (catching exceptions in driver from reaching server and failing all hosts)
+                    # global inputs also read in from api call and merged into app params
+                    res_id = command_context.reservation.reservation_id
+                    reporter = SandboxReporter(api, res_id, logger)
+                    sandbox_details = api.GetReservationDetails(res_id, True).ReservationDescription
+                    sb_resources = sandbox_details.Resources
+                    sb_global_inputs = api.GetReservationInputs(res_id).GlobalInputs
 
-                    # FOR DEBUGGING PURPOSES TO CUT FLOW SHORT
+                    # this step does the IP lookup for resource names and populates data to conf host list
+                    ansi_conf = find_resources_matching_addresses(sb_resources, ansi_conf, api, reporter)
+
+                    # 2G service needs to read some config data stored on app and no api exists to read this currently
+                    if not ansi_conf.is_second_gen_service:
+                        cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter)
+
+                    # this step merges all global inputs to app params. App level params take precedence
+                    ansi_conf = merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs)
+
+                    output_writer = ReservationOutputWriter(api, command_context)
+                    log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
+                    logger.debug(log_msg)
+
+                    # FOR DEBUGGING PURPOSES TO CUT FLOW SHORT AND JUST INSPECT THE MANIPULATED ANSI_CONF JSON
                     # output_writer.write(log_msg)
                     # return
 

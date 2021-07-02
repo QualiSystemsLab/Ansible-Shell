@@ -43,6 +43,8 @@ class HostConfiguration(object):
         self.access_key = None
         self.groups = []
         self.parameters = {}
+        self.resource_name = None
+        self.health_check_passed = False
 
 
 def over_ride_defaults(ansi_conf, params_dict, host_index):
