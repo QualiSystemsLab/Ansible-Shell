@@ -170,9 +170,11 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         :param AnsibleConfig2G resource:
         :param str playbook_path:
         :param SandboxReporter reporter:
+
         :return:
         """
         service_full_url = resource.playbook_url_full
+
         gitlab_branch = resource.gitlab_branch if resource.gitlab_branch else "master"
         base_path = resource.playbook_base_path
         service_playbook_path = resource.playbook_script_path
@@ -182,9 +184,18 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
 
             # FALLBACK TO FULL URL
             if service_full_url:
+                branch = resource.branch
                 is_gitlab_api = is_base_path_gitlab_api(service_full_url)
                 if is_gitlab_api:
                     return self._append_gitlab_url_suffix(service_full_url, gitlab_branch)
+
+                if branch:
+                    url_list = service_full_url.split("/")
+                    list_len = len(url_list)
+                    url_list[list_len - 2] = branch
+                    new_url = "/".join(url_list)
+                    return new_url
+
                 return service_full_url
 
             # FALLBACK TO BASE PATH
@@ -453,7 +464,7 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         if curr_token:
             new_obj["repositoryDetails"]["token"] = "*******"
         json_copy = json.dumps(new_obj, indent=4)
-      #  reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
+        #reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
 
         return ansi_conf_json
 

@@ -365,6 +365,21 @@ class AnsibleConfig2G(object):
         self.attributes['Ansible Config 2G.Ansible Config Selector'] = value
 
     @property
+    def branch(self):
+        """
+        :rtype: str
+        """
+        return self.attributes['Ansible Config 2G.Branch'] if 'Ansible Config 2G.Branch' in self.attributes else None
+
+    @branch.setter
+    def branch(self, value):
+        """
+        (Optional) This attribute relevant incase you want to overrite the branch specified in the Playbook URL Full attribute.
+        :type value: str
+        """
+        self.attributes['Ansible Config 2G.Branch'] = value
+
+    @property
     def name(self):
         """
         :rtype: str

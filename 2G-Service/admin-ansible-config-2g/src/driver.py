@@ -181,9 +181,18 @@ class AdminAnsibleConfig2GDriver(ResourceDriverInterface):
 
             # FALLBACK TO FULL URL
             if service_full_url:
+                branch = resource.branch
                 is_gitlab_api = is_base_path_gitlab_api(service_full_url)
                 if is_gitlab_api:
                     return self._append_gitlab_url_suffix(service_full_url, gitlab_branch)
+
+                if branch:
+                    url_list = service_full_url.split("/")
+                    list_len = len(url_list)
+                    url_list[list_len - 2] = branch
+                    new_url = "/".join(url_list)
+                    return new_url
+
                 return service_full_url
 
             # FALLBACK TO BASE PATH
