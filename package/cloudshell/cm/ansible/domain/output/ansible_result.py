@@ -3,6 +3,11 @@ import os
 import re
 
 from cloudshell.cm.ansible.domain.output.unixToHtmlConverter import UnixToHtmlColorConverter
+from cloudshell.cm.ansible.domain.ansible_configuration import HostConfiguration
+
+
+DUPLICATE_IP_ISSUE_MSG = "Duplicate IP issue, playbook did not run."
+FAILED_CONNECTIVITY_CHECK_MSG = "Failed connectivity check, playbook did not run."
 
 
 class AnsibleResult(object):
@@ -10,39 +15,55 @@ class AnsibleResult(object):
     END = '\033\[0m'
     DID_NOT_RUN_ERROR = 'Did not run / no information for this host.'
 
-    def __init__(self, output, error, ips):
+    def __init__(self, output, error, hosts_conf_list):
         """
-        :type result: boolean
-        :type success: dict
+
+        :param str output:
+        :param str error:
+        :param list[HostConfiguration] hosts_conf_list:
         """
-        self.error = str(error)
         self.output = output
-        self.ips = ips
+        self.error = str(error)
+        self.hosts_conf_list = hosts_conf_list
         self.host_results = self._load()
-        self.success = not [h for h in self.host_results if not h.success]
+        self.failed_hosts = [h for h in self.host_results if not h.success]
+        self.success = not self.failed_hosts
 
     def to_json(self):
-        arr = [{'host':h.ip,'success':h.success,'error':h.error} for h in self.host_results]
+        arr = [{'host':h.ip,
+                'resource_name':h.resource_name,
+                'success':h.success,
+                'error':h.error}
+               for h in self.host_results]
         return json.dumps(arr, indent=4)
+
+    def failed_hosts_to_json(self):
+        return json.dumps(self.failed_hosts, indent=4)
 
     def _load(self):
         host_results = []
         recap_table = self._get_final_table()
         error_by_host = self._get_failing_hosts_errors()
         general_error = self._get_parsed_error()
-        for ip in self.ips:
+        for host in self.hosts_conf_list:
+
+            # sort the hosts that failed before playbook run
+            if not host.resource_name:
+                host_results.append(HostResult(host.ip, host.resource_name, False, DUPLICATE_IP_ISSUE_MSG))
+            elif not host.health_check_passed:
+                host_results.append(HostResult(host.ip, host.resource_name, False, FAILED_CONNECTIVITY_CHECK_MSG))
             # Success
-            if recap_table.get(ip) == True:
-                host_results.append(HostResult(ip, True))
+            elif recap_table.get(host.ip) == True:
+                host_results.append(HostResult(host.ip, host.resource_name, True))
             # Failed with error
-            elif error_by_host.get(ip):
-                host_results.append(HostResult(ip, False, error_by_host.get(ip)))
+            elif error_by_host.get(host.ip):
+                host_results.append(HostResult(host.ip, host.resource_name, False, error_by_host.get(host.ip)))
             # Failed without error
-            elif recap_table.get(ip) == False:
-                host_results.append(HostResult(ip, False, self.error))
+            elif recap_table.get(host.ip) == False:
+                host_results.append(HostResult(host.ip, host.resource_name, False, self.error))
             # Didn't run at all (no information for this ip)
             else:
-                host_results.append(HostResult(ip, False, self.DID_NOT_RUN_ERROR+os.linesep+general_error))
+                host_results.append(HostResult(host.ip, host.resource_name, False, self.DID_NOT_RUN_ERROR+os.linesep+general_error))
         return host_results
 
     def _get_final_table(self):
@@ -75,7 +96,8 @@ class AnsibleResult(object):
 
 
 class HostResult(object):
-    def __init__(self, ip, success, error = None):
+    def __init__(self, ip, resource_name, success, error=None):
         self.ip = ip
+        self.resource_name = resource_name
         self.success = success
         self.error = error

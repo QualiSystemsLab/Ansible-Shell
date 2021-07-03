@@ -3,6 +3,7 @@ from ansible_configuration import AnsibleConfiguration
 from cloudshell.shell.core.driver_context import ResourceCommandContext
 import copy
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
+from cloudshell.cm.ansible.domain.driver_globals import DRIVER_SERVICE_NAME_PREFIX
 
 
 class DuplicateAddressException(Exception):
@@ -129,3 +130,20 @@ def merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs):
             if not host_params_dict.get(global_input.ParamName):
                 host_params_dict[global_input.ParamName] = global_input.Value
     return ansi_conf
+
+
+def set_failed_hosts_to_sandbox_data(service_name, failed_host_json, api, res_id, logger):
+    """
+    workaround to throwing error in driver which sets live status on all resources
+    :param str service_name:
+    :param str failed_host_json:
+    :param CloudShellAPISession api:
+    :param str res_id:
+    :param logging.Logger logger:
+    :return:
+    """
+    logger.info("Setting sandbox data for failed hosts in service '{}'".format(service_name))
+    sb_data_key = "failed_" + service_name
+    sb_data_value = failed_host_json
+    sb_data = [SandboxDataKeyValue(sb_data_key, sb_data_value)]
+    api.SetSandboxData(res_id, sb_data)

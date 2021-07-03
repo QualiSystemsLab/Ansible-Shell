@@ -1,5 +1,8 @@
 import json
 from cloudshell.api.cloudshell_api import CloudShellAPISession
+import urllib
+from cloudshell.cm.ansible.domain.Helpers.parse_script_path_from_repo_url import parse_script_path_from_url
+from cloudshell.cm.ansible.domain.driver_globals import DRIVER_SERVICE_NAME_PREFIX
 
 
 # OPTIONAL SCRIPT PARAMETERS, IF PRESENT WILL OVERRIDE THE DEFAULT READ-ONLY VALUES
@@ -168,3 +171,35 @@ def bool_parse(b):
         return False
     else:
         return str(b).lower() == 'true'
+
+
+class AnsibleServiceNameParser(object):
+
+    def __init__(self, ansible_json):
+        """
+        :type api: CloudShellAPISession
+        """
+        self._ansible_json = ansible_json
+        self.is_second_gen_service = False
+        self.repo_url = None
+        self._load_json()
+
+    def _load_json(self):
+        """
+        Decodes a json string to an AnsibleConfiguration instance.
+        :type json_str: str
+        :rtype AnsibleConfiguration
+        """
+        json_obj = json.loads(self._ansible_json)
+        self.is_second_gen_service = json_obj.get('isSecondGenService', False)
+        self.repo_url = json_obj['repositoryDetails'].get('url')
+
+    def parse_service_name_from_repo_url(self):
+        if not self.repo_url:
+            raise Exception("Repo URL not found!")
+        script_path = parse_script_path_from_url(self.repo_url)
+        service_name = "{}_{}".format(DRIVER_SERVICE_NAME_PREFIX, script_path)
+        return service_name
+
+
+

@@ -4,8 +4,8 @@ class AnsibleConnectionHelper(object):
     WIN_RM_PORT = '5985'
     CONNECTION_METHOD_SSH = 'ssh'
     CONNECTION_METHOD_NETWORK_CLI = "network_cli"
-    SSH_PORT = '22'
     CONNECTION_METHOD_VM_WARE = "vmware_tools"
+    SSH_PORT = '22'
     VM_WARE_PORT = '443'
 
     def __init__(self):
