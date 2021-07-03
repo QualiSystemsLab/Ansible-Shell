@@ -90,11 +90,18 @@ class AnsibleShell(object):
                     cancellation_sampler = CancellationSampler(cancellation_context)
 
                     with TempFolderScope(self.file_system, logger):
+                        # playbook is ultimate dependency, so let's get that first before polling vms
+                        playbook_name = self._download_playbook(ansi_conf, cancellation_sampler, logger)
+
+                        # check that at least one host from list is reachable
+                        self._wait_for_all_hosts_to_be_deployed(ansi_conf, logger, output_writer)
+
+                        # build auxiliary file dependencies
                         self._add_ansible_config_file(logger)
                         self._add_host_vars_files(ansi_conf, logger)
-                        self._wait_for_all_hosts_to_be_deployed(ansi_conf, logger, output_writer)
                         self._add_inventory_file(ansi_conf, logger)
-                        playbook_name = self._download_playbook(ansi_conf, cancellation_sampler, logger)
+
+                        # run the downloaded playbook and return json report
                         result_json = self._run_playbook(ansi_conf, playbook_name, output_writer, cancellation_sampler, logger)
                         return result_json
 
