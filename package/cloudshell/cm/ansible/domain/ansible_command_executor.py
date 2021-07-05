@@ -41,8 +41,6 @@ class AnsibleCommandExecutor(object):
 
         start_time = time.time()
         curr_minutes_counter = 0
-        # txt_chunks_output_counter = 0
-        # lines_printed_to_console = 0
         all_txt_lines_pointer = 0
 
         with StdoutAccumulator(process.stdout) as stdout:
@@ -90,8 +88,8 @@ class AnsibleCommandExecutor(object):
                                 continue
                             if "PLAY [" in curr_line or "TASK [" in curr_line:
                                 # when we hit the line, slice up to that point
-                                logger.info("playbook / task line: " + curr_line)
-                                logger.info("playbook / task next line: " + all_txt_lines[i + 1])
+                                logger.debug("playbook / task line: " + curr_line)
+                                logger.debug("playbook / task next line: " + all_txt_lines[i + 1])
                                 target_chopping_index = i
                                 break
 
@@ -102,21 +100,8 @@ class AnsibleCommandExecutor(object):
                             self._write_out_target_lines(playbook_file, target_lines, converter,
                                                          elapsed_run_time,
                                                          output_writer, logger)
-                            # reset pointer
+                            # move pointer along
                             all_txt_lines_pointer = target_chopping_index
-
-                    # print out chunked lines of ansible output
-                    # if len(txt_lines) > txt_chunks_output_counter:
-                    #     if stdout.lines_streamed_count > self.CHUNKED_OUTPUT_LINE_SIZE + lines_printed_to_console:
-                    #         target_lines = txt_lines[txt_chunks_output_counter:len(txt_lines)]
-                    #
-                    #         elapsed_run_time = self.format_elapsed_run_time_string(curr_minutes_counter,
-                    #                                                                elapsed_seconds)
-                    #         self.write_out_target_lines(playbook_file, target_lines, converter,
-                    #                                     elapsed_run_time,
-                    #                                     output_writer, logger)
-                    #         txt_chunks_output_counter = len(txt_lines)
-                    #         lines_printed_to_console = stdout.lines_streamed_count
 
                     if process.poll() is not None:
                         break

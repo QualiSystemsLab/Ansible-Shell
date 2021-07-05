@@ -77,8 +77,8 @@ class AnsibleShell(object):
                     res_id = command_context.reservation.reservation_id
                     reporter = SandboxReporter(api, res_id, logger)
                     service_name = command_context.resource.name
-                    msg = "Ansible service '{}' started on Execution Server '{}'".format(service_name,
-                                                                                         self.execution_server_ip)
+                    msg = "'{}' started on ES '{}'".format(service_name,
+                                                           self.execution_server_ip)
                     reporter.info_out(msg)
 
                     # sandbox details needed to find resource names not provided by server - needed to set live status
@@ -113,9 +113,11 @@ class AnsibleShell(object):
 
                         # check that at least one host from list is reachable
                         self._wait_for_all_hosts_to_be_deployed(ansi_conf, service_name, api, logger, reporter)
+
+                        # if all hosts failed health check throw exception and exit
                         self._validate_host_connectivity(ansi_conf.hosts_conf, service_name, reporter)
 
-                        # build auxiliary file dependencies
+                        # build auxiliary file dependencies for playbook
                         self._add_ansible_config_file(logger)
                         self._add_host_vars_files(ansi_conf, logger)
                         self._add_inventory_file(ansi_conf, logger)
@@ -125,6 +127,7 @@ class AnsibleShell(object):
                                                                               cancellation_sampler,
                                                                               logger, reporter, service_name)
 
+                        # if failed set error status, if passed set green with run time info
                         self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
                                                                  run_time_seconds, api)
 
@@ -134,13 +137,15 @@ class AnsibleShell(object):
                             reporter.info_out("Failed hosts:\n{}".format(failed_hosts_json))
 
                             # for default playbooks store failed hosts to sandbox data to raise error at end of setup
+                            # 2G service can raise it's own exception
                             if not ansi_conf.is_second_gen_service:
                                 set_failed_hosts_to_sandbox_data(service_name, failed_hosts_json, api, res_id, logger)
 
-                            failed_msg = "Ansible driver '{}' FAILED. See logs for details".format(service_name)
+                            failed_msg = "'{}' completed with failed hosts. See logs for details".format(service_name)
                             return failed_msg
 
-                        success_msg = "Ansible driver '{}' PASSED with no errors".format(service_name)
+                        success_msg = "'{}' completed SUCCESSFULLY for all hosts in {:.2f} seconds".format(service_name,
+                                                                                                           run_time_seconds)
                         logger.info(success_msg)
                         return success_msg
 
@@ -215,20 +220,20 @@ class AnsibleShell(object):
         # we need password field to be passed for gitlab auth tokens (which require token and not user)
         auth = HttpAuth(repo.username, repo.password) if repo.password else None
         reporter.info_out(
-            "Starting Playbook download from '{}' to Execution Server '{}'".format(repo.url_netloc,
-                                                                                   self.execution_server_ip))
+            "Playbook DOWNLOADING from '{}' to ES '{}'".format(repo.url_netloc,
+                                                               self.execution_server_ip))
         start_time = default_timer()
         try:
             playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, auth, logger, cancellation_sampler)
         except Exception as e:
-            exc_msg = "Error downloading playbook from '{}' to Execution Server '{}'.\nException: {}".format(
+            exc_msg = "Error downloading playbook from '{}' to ES '{}'. Exception: {}".format(
                 repo.url_netloc,
                 self.execution_server_ip,
                 str(e))
             reporter.err_out(exc_msg)
             raise PlaybookDownloadException(exc_msg)
         download_seconds = default_timer() - start_time
-        completed_msg = "'{}' playbook download finished after '{}' seconds".format(service_name, download_seconds)
+        completed_msg = "'{}' playbook download finished after '{:.2f}' seconds".format(service_name, download_seconds)
         reporter.info_out(completed_msg)
         return playbook_name
 
@@ -243,14 +248,14 @@ class AnsibleShell(object):
         :type reporter: SandboxReporter
         :type str service_name:
         """
-        reporter.info_out("Ansible Service '{}' executing the playbook '{}'...".format(service_name, playbook_name))
+        reporter.info_out("'{}' executing the playbook '{}'...".format(service_name, playbook_name))
 
         start_time = default_timer()
         output, error = self.executor.execute_playbook(
             playbook_name, self.INVENTORY_FILE_NAME, ansi_conf.additional_cmd_args, output_writer, logger,
             cancellation_sampler)
         total_run_time = default_timer() - start_time
-        reporter.info_out("Ansible Service '{}' done executing after '{}' seconds".format(service_name, total_run_time))
+        reporter.info_out("'{}' finished EXECUTING after '{:.2f}' seconds".format(service_name, total_run_time))
 
         ansible_result = AnsibleResult(output, error, ansi_conf.hosts_conf)
 
@@ -271,7 +276,8 @@ class AnsibleShell(object):
         :param SandboxReporter reporter:
         :return:
         """
-        wait_for_deploy_msg = "Waiting for all hosts to deploy for service '{}'...".format(service_name)
+        wait_for_deploy_msg = "'{}' checking CONNECTIVITY to all hosts from ES '{}'...".format(service_name,
+                                                                                               self.execution_server_ip)
 
         # timeout_minutes = ansi_conf.timeout_minutes
 
@@ -302,9 +308,9 @@ class AnsibleShell(object):
                 self.connection_service.check_connection(logger, host, ansible_port=ansible_port,
                                                          timeout_minutes=timeout_minutes)
             except Exception as e:
-                err_msg = "Connectivity Check FAILED to resource '{}', IP '{}'. Message: '{}'".format(host.ip,
-                                                                                                      host.resource_name,
-                                                                                                      str(e))
+                err_msg = "Connectivity Check FAILED to resource '{}', IP '{}'. Exception: '{}'".format(host.ip,
+                                                                                                        host.resource_name,
+                                                                                                        str(e))
                 reporter.err_out(err_msg)
                 api.SetResourceLiveStatus(resourceFullName=host.resource_name,
                                           liveStatusName="Error",
@@ -338,8 +344,8 @@ class AnsibleShell(object):
                                           liveStatusName="Error",
                                           additionalInfo=live_status_msg)
             else:
-                live_status_msg = "SUCCESSFUL playbook service '{}'. Runtime: {} seconds".format(service_name,
-                                                                                                 run_time_seconds)
+                live_status_msg = "SUCCESSFUL playbook service '{}'. Runtime: {:.2f} seconds".format(service_name,
+                                                                                                     run_time_seconds)
                 api.SetResourceLiveStatus(resourceFullName=host.resource_name,
                                           liveStatusName="Online",
                                           additionalInfo=live_status_msg)
