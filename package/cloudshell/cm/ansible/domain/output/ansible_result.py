@@ -30,15 +30,23 @@ class AnsibleResult(object):
         self.success = not self.failed_hosts
 
     def to_json(self):
+        return self._to_json(self.host_results)
+
+    def failed_hosts_to_json(self):
+        return self._to_json(self.failed_hosts)
+
+    @staticmethod
+    def _to_json(host_results):
+        """
+        :param list[HostResult] host_results:
+        :return:
+        """
         arr = [{'host':h.ip,
                 'resource_name':h.resource_name,
                 'success':h.success,
                 'error':h.error}
-               for h in self.host_results]
+               for h in host_results]
         return json.dumps(arr, indent=4)
-
-    def failed_hosts_to_json(self):
-        return json.dumps(self.failed_hosts, indent=4)
 
     def _load(self):
         host_results = []

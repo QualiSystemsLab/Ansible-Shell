@@ -10,6 +10,7 @@ class StreamAccumulator(object):
         self.thread = Thread(target=self._push_to_queue)
         self.thread.daemon = True
         self.lock = RLock()
+        self.lines_streamed_count = 0
 
     def __enter__(self):
         self.thread.start()
@@ -31,13 +32,14 @@ class StreamAccumulator(object):
                         self.queue.put(line)
 
     def read_all_txt(self):
+        lines = []
         try:
-            lines = []
             while True:
                 lines.append(self.queue.get_nowait())
         except Empty:
             pass
         finally:
+            self.lines_streamed_count += len(lines)
             return os.linesep.join(lines)
 
 

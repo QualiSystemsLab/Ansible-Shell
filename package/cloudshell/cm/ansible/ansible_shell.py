@@ -64,8 +64,9 @@ class AnsibleShell(object):
         service_name_parser = AnsibleServiceNameParser(ansi_conf_json)
 
         # for default management playbooks need to change service name for logging purposes
-        if service_name_parser.is_second_gen_service:
-            command_context.resource.name = service_name_parser.parse_service_name_from_repo_url()
+        if not service_name_parser.is_second_gen_service:
+            command_context.resource.name = service_name_parser.rename_first_gen_service_name(
+                command_context.resource.name)
 
         with LoggingSessionContext(command_context) as logger:
             with ErrorHandlingContext(logger):
@@ -132,7 +133,7 @@ class AnsibleShell(object):
                             reporter.err_out("FAILED hosts in Ansible Service Execution")
                             reporter.info_out("Failed hosts:\n{}".format(failed_hosts_json))
 
-                            # for default playbooks store failed hosts to sandbox data so that exception can be thrown later
+                            # for default playbooks store failed hosts to sandbox data to raise error at end of setup
                             if not ansi_conf.is_second_gen_service:
                                 set_failed_hosts_to_sandbox_data(service_name, failed_hosts_json, api, res_id, logger)
 
@@ -214,20 +215,20 @@ class AnsibleShell(object):
         # we need password field to be passed for gitlab auth tokens (which require token and not user)
         auth = HttpAuth(repo.username, repo.password) if repo.password else None
         reporter.info_out(
-            "Starting Playbook download from '{}' to Execution Server '{}'".format(repo.url, self.execution_server_ip))
+            "Starting Playbook download from '{}' to Execution Server '{}'".format(repo.url_netloc,
+                                                                                   self.execution_server_ip))
         start_time = default_timer()
         try:
             playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, auth, logger, cancellation_sampler)
         except Exception as e:
-            exc_msg = "Issue downloading playbook from '{}' to Execution Server '{}'. Exception: {}".format(repo.url,
-                                                                                                            self.execution_server_ip,
-                                                                                                            str(e))
+            exc_msg = "Error downloading playbook from '{}' to Execution Server '{}'.\nException: {}".format(
+                repo.url_netloc,
+                self.execution_server_ip,
+                str(e))
             reporter.err_out(exc_msg)
             raise PlaybookDownloadException(exc_msg)
         download_seconds = default_timer() - start_time
-        completed_msg = "Service '{}' finished playbook download from '{}' after '{}' seconds".format(service_name,
-                                                                                                      repo.url,
-                                                                                                      download_seconds)
+        completed_msg = "'{}' playbook download finished after '{}' seconds".format(service_name, download_seconds)
         reporter.info_out(completed_msg)
         return playbook_name
 
@@ -294,14 +295,14 @@ class AnsibleShell(object):
             port_ansible_port = "Connectivity Timeout: {} minutes, Ansible port: {}".format(timeout_minutes,
                                                                                             ansible_port)
 
-            reporter.info_out("Trying to connect to host:" + host.ip)
+            reporter.info_out("Trying to connect to resource '{}', IP '{}'".format(host.resource_name, host.ip))
             reporter.info_out(port_ansible_port)
 
             try:
                 self.connection_service.check_connection(logger, host, ansible_port=ansible_port,
                                                          timeout_minutes=timeout_minutes)
             except Exception as e:
-                err_msg = "Connectivity Check FAILED to Resource '{}', IP '{}'. Message: '{}'".format(host.ip,
+                err_msg = "Connectivity Check FAILED to resource '{}', IP '{}'. Message: '{}'".format(host.ip,
                                                                                                       host.resource_name,
                                                                                                       str(e))
                 reporter.err_out(err_msg)
@@ -322,14 +323,16 @@ class AnsibleShell(object):
         :return:
         """
         for host in host_results:
-            # these errors already had their live status set in real time earlier
-            if DUPLICATE_IP_ISSUE_MSG in host.error:
-                continue
-            if FAILED_CONNECTIVITY_CHECK_MSG in host.error:
-                continue
 
             # set status for failed playbook results
             if not host.success:
+                if host.error:
+                    # these errors already had their live status set in real time earlier
+                    if DUPLICATE_IP_ISSUE_MSG in host.error:
+                        continue
+                    if FAILED_CONNECTIVITY_CHECK_MSG in host.error:
+                        continue
+
                 live_status_msg = "FAILED playbook service '{}'. Error: {}".format(service_name, host.error)
                 api.SetResourceLiveStatus(resourceFullName=host.resource_name,
                                           liveStatusName="Error",

@@ -60,7 +60,7 @@ def _read_user_ansible_cfg():
 def _build_config_keys_from_user_cfg(input_cfg_text):
     """
     convert user cfg string into data structure
-    return orderded dict of ordered dicts
+    return ordered dict of ordered dicts
     {
         '[defaults]': {key1: val1, key2: val2},
         '[paramiko_connection]': {key1: val1, key2: val2},

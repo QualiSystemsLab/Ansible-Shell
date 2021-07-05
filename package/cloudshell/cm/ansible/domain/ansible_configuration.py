@@ -1,7 +1,7 @@
 import json
 from cloudshell.api.cloudshell_api import CloudShellAPISession
 import urllib
-from cloudshell.cm.ansible.domain.Helpers.parse_script_path_from_repo_url import parse_script_path_from_url
+from cloudshell.cm.ansible.domain.Helpers.parse_script_path_from_repo_url import parse_script_path_from_url, get_net_loc_from_url
 from cloudshell.cm.ansible.domain.driver_globals import DRIVER_SERVICE_NAME_PREFIX
 
 
@@ -34,6 +34,7 @@ class PlaybookRepository(object):
         self.url = None
         self.username = None
         self.password = None
+        self.url_netloc = None
 
 
 class HostConfiguration(object):
@@ -97,6 +98,7 @@ class AnsibleConfigurationParser(object):
             ansi_conf.playbook_repo.url = json_obj['repositoryDetails'].get('url')
             ansi_conf.playbook_repo.username = json_obj['repositoryDetails'].get('username')
             ansi_conf.playbook_repo.password = json_obj['repositoryDetails'].get('password')
+            ansi_conf.playbook_repo.url_netloc = get_net_loc_from_url(ansi_conf.playbook_repo.url)
 
         for host_index, json_host in enumerate(json_obj.get('hostsDetails', [])):
             host_conf = HostConfiguration()
@@ -194,11 +196,14 @@ class AnsibleServiceNameParser(object):
         self.is_second_gen_service = json_obj.get('isSecondGenService', False)
         self.repo_url = json_obj['repositoryDetails'].get('url')
 
-    def parse_service_name_from_repo_url(self):
-        if not self.repo_url:
-            raise Exception("Repo URL not found!")
+    def rename_first_gen_service_name(self, current_first_gen_name):
+        """
+        :param str current_first_gen_name:
+        :return:
+        """
+        first_gen_server_id = current_first_gen_name.split("_")[1].split("--")[0].strip()
         script_path = parse_script_path_from_url(self.repo_url)
-        service_name = "{}_{}".format(DRIVER_SERVICE_NAME_PREFIX, script_path)
+        service_name = "{}_{}__{}".format(DRIVER_SERVICE_NAME_PREFIX, first_gen_server_id, script_path)
         return service_name
 
 
