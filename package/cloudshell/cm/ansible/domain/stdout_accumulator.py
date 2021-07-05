@@ -10,7 +10,7 @@ class StreamAccumulator(object):
         self.thread = Thread(target=self._push_to_queue)
         self.thread.daemon = True
         self.lock = RLock()
-        self.lines_streamed_count = 0
+        # self.lines_streamed_count = 0
 
     def __enter__(self):
         self.thread.start()
@@ -39,8 +39,9 @@ class StreamAccumulator(object):
         except Empty:
             pass
         finally:
-            self.lines_streamed_count += len(lines)
-            return os.linesep.join(lines)
+            # self.lines_streamed_count += len(lines)
+            # return os.linesep.join(lines)
+            return lines
 
 
 class StdoutAccumulator(StreamAccumulator):
