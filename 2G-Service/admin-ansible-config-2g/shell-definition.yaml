@@ -84,7 +84,7 @@ node_types:
         description: (Optional) This attribute relevant incase you want to overrite the branch specified in the Playbook URL Full attribute.
         type: string
         tags: [ user_input ]
-        
+
     artifacts:
       icon:
         file: shell-icon.png
