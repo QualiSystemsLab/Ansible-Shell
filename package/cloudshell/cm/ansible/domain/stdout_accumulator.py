@@ -1,5 +1,5 @@
 import os
-from Queue import Queue, Empty
+from queue import Queue, Empty
 from threading import Thread, RLock
 
 class StreamAccumulator(object):
@@ -33,7 +33,7 @@ class StreamAccumulator(object):
         try:
             lines = []
             while True:
-                lines.append(self.queue.get_nowait())
+                lines.append(self.queue.get_nowait().decode())
         except Empty:
             pass
         finally:

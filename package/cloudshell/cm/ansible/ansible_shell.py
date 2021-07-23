@@ -106,7 +106,7 @@ class AnsibleShell(object):
                     file.add_password(host_conf.password)
                 else:
                     file_name = host_conf.ip + '_access_key.pem'
-                    with self.file_system.create_file(file_name, 0400) as file_stream:
+                    with self.file_system.create_file(file_name, 0o400) as file_stream:
                         file_stream.write(host_conf.access_key)
                     file.add_conn_file(file_name)
 
@@ -121,7 +121,11 @@ class AnsibleShell(object):
         auth = None
         if ansi_conf.playbook_repo.username or ansi_conf.playbook_repo.token:
             auth = HttpAuth(repo.username, repo.password, repo.token)
-        playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, auth, logger, cancellation_sampler)
+
+        logger.info('Verify certificate: ' + str(ansi_conf.verify_certificate))
+        playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, 
+                                            auth, logger, cancellation_sampler, 
+                                            ansi_conf.verify_certificate)
         logger.info('download playbook file' + str(playbook_name))
         return playbook_name
 
@@ -160,7 +164,7 @@ class AnsibleShell(object):
             logger.info("Trying to connect to host:" + host.ip)
             ansible_port = self.ansible_connection_helper.get_ansible_port(host)
 
-            if HostVarsFile.ANSIBLE_PORT in host.parameters.keys() and (
+            if HostVarsFile.ANSIBLE_PORT in list(host.parameters.keys()) and (
                     host.parameters[HostVarsFile.ANSIBLE_PORT] != '' and
                     host.parameters[HostVarsFile.ANSIBLE_PORT] is not None):
                 ansible_port = host.parameters[HostVarsFile.ANSIBLE_PORT]

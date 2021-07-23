@@ -1,6 +1,6 @@
 import os
 from logging import Logger
-from file_system_service import FileSystemService
+from .file_system_service import FileSystemService
 
 
 class HostVarsFile(object):
@@ -32,10 +32,10 @@ class HostVarsFile(object):
             self.file_system.create_folder(HostVarsFile.FOLDER_NAME)
         with self.file_system.create_file(self.file_path) as file_stream:
             lines = ['---']
-            for key, value in sorted(self.vars.iteritems()):
+            for key, value in sorted(self.vars.items()):
                 lines.append(str(key) + ': "' + str(value) + '"')
-            file_stream.write(os.linesep.join(lines))
-         #   self.logger.debug(os.linesep.join(lines))
+            file_stream.write(bytes(os.linesep.join(lines), 'utf-8'))
+            self.logger.debug(os.linesep.join(lines))
         self.logger.info('Done.')
 
     def add_vars(self, vars):
@@ -54,7 +54,7 @@ class HostVarsFile(object):
         self.vars[HostVarsFile.ANSIBLE_PASSWORD] = password
 
     def add_port(self, port):
-        if HostVarsFile.ANSIBLE_PORT not in self.vars.keys() or \
+        if HostVarsFile.ANSIBLE_PORT not in list(self.vars.keys()) or \
                 (self.vars[HostVarsFile.ANSIBLE_PORT] == '') or \
                         self.vars[HostVarsFile.ANSIBLE_PORT] is None:
             self.vars[HostVarsFile.ANSIBLE_PORT] = port
