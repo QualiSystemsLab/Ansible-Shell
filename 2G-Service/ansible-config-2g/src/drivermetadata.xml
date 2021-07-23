@@ -1,5 +1,5 @@
 <Driver Description="Describe the purpose of your CloudShell shell" MainClass="driver.AnsibleConfig2GDriver"
-        Name="AnsibleConfig2GDriver" Version="1.0.1" PythonVersion="2">
+        Name="AnsibleConfig2GDriver" Version="1.0.1" PythonVersion="3">
     <Layout>
         <Category Name="Hidden Commands">
             <Command Description="Execute playbook on any cloudshell resources by passing resource name."

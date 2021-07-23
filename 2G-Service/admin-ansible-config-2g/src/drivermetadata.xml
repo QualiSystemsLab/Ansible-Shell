@@ -1,5 +1,5 @@
 <Driver Description="Describe the purpose of your CloudShell shell" MainClass="driver.AdminAnsibleConfig2GDriver"
-        Name="AdminAnsibleConfig2GDriver" Version="1.0.1" PythonVersion="2">
+        Name="AdminAnsibleConfig2GDriver" Version="1.0.1" PythonVersion="3">
     <Layout>
         <Category Name="Default Run Playbook">
             <Command Description="Execute playbook on connected resources." EnableCancellation="true"

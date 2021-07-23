@@ -51,6 +51,8 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         :param CancellationContext cancellation_context:
         :return:
         """
+
+
         api = CloudShellSessionContext(context).get_api()
         res_id = context.reservation.reservation_id
         reporter = self._get_sandbox_reporter(context, api)
