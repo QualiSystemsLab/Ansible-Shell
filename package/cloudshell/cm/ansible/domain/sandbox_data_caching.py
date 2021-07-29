@@ -3,7 +3,7 @@ from ansible_configuration import AnsibleConfiguration
 from cloudshell.shell.core.driver_context import ResourceCommandContext
 import copy
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
-from cloudshell.cm.ansible.domain.driver_globals import DRIVER_SERVICE_NAME_PREFIX
+from cloudshell.cm.ansible.domain.driver_globals import ANSIBLE_MGMT_FAILED_PREFIX
 
 
 class DuplicateAddressException(Exception):
@@ -111,8 +111,7 @@ def cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter):
             err_msg = "Issue setting sandbox data for resource '{}'".format(resource_name)
             reporter.err_out(err_msg, log_only=True)
             raise Exception(err_msg)
-        reporter.info_out("set sandbox data key: {}\n{}".format(sb_data_key, sb_data_value),
-                          log_only=True)
+        reporter.info_out("set ansible sandbox data key: {}".format(sb_data_key), log_only=True)
 
 
 def merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs):
@@ -143,7 +142,7 @@ def set_failed_hosts_to_sandbox_data(service_name, failed_host_json, api, res_id
     :return:
     """
     logger.info("Setting sandbox data for failed hosts in service '{}'".format(service_name))
-    sb_data_key = "failed_" + service_name
+    sb_data_key = ANSIBLE_MGMT_FAILED_PREFIX + service_name
     sb_data_value = failed_host_json
     sb_data = [SandboxDataKeyValue(sb_data_key, sb_data_value)]
     api.SetSandboxData(res_id, sb_data)

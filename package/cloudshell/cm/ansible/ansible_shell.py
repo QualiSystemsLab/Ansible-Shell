@@ -29,6 +29,7 @@ from domain.sandbox_data_caching import find_resources_matching_addresses, cache
     merge_global_inputs_to_app_params, set_failed_hosts_to_sandbox_data
 from cloudshell.api.cloudshell_api import CloudShellAPISession
 from cloudshell.cm.ansible.domain.Helpers.execution_server_info import get_first_nic_ip
+import cloudshell.cm.ansible.domain.driver_globals as consts
 from timeit import default_timer
 
 
@@ -72,82 +73,140 @@ class AnsibleShell(object):
             with ErrorHandlingContext(logger):
                 with CloudShellSessionContext(command_context) as api:
                     logger.info('\'execute_playbook\' is called with the configuration json: \n' + ansi_conf_json)
-                    ansi_conf = AnsibleConfigurationParser(api).json_to_object(ansi_conf_json)
 
                     res_id = command_context.reservation.reservation_id
                     reporter = SandboxReporter(api, res_id, logger)
                     service_name = command_context.resource.name
-                    msg = "'{}' started on ES '{}'".format(service_name,
-                                                           self.execution_server_ip)
-                    reporter.info_out(msg)
+                    command_start_msg = "'{}' started on ES '{}'".format(service_name,
+                                                                         self.execution_server_ip)
+                    reporter.info_out(command_start_msg)
 
-                    # sandbox details needed to find resource names not provided by server - needed to set live status
-                    sandbox_details = api.GetReservationDetails(res_id, True).ReservationDescription
-                    sb_resources = sandbox_details.Resources
-                    sb_global_inputs = api.GetReservationInputs(res_id).GlobalInputs
+                    self.ansible_sanity_check(reporter, service_name)
+                    try:
+                        playbook_result = self._execute_playbook(command_context, ansi_conf_json, cancellation_context,
+                                                                 api, res_id, service_name, logger, reporter)
+                    except Exception as e:
+                        err_msg = "Error while executing playbook '{}'. {}: {}".format(service_name,
+                                                                                       type(e).__name__,
+                                                                                       str(e))
+                        reporter.err_out(err_msg)
+                        return "'{}' failed ansible execution".format(service_name)
+                    return playbook_result
 
-                    # this step does the IP lookup for resource names and populates data to conf host list
-                    ansi_conf = find_resources_matching_addresses(sb_resources, ansi_conf, api, reporter)
+    def ansible_sanity_check(self, reporter, service_name):
+        """
+        run ansible version check to see that ansible is installed on ES
+        :param SandboxReporter reporter:
+        :param str service_name:
+        :return:
+        """
+        # log ansible version info - will also function as ansible sanity check
+        try:
+            ansible_version_info = self.executor.get_ansible_version_data(
+                execution_server_ip=self.execution_server_ip)
+        except Exception as e:
+            err_msg = "Issue getting Ansible Version Info. Stopping Execution '{}'\nException '{}': {}".format(
+                service_name,
+                type(e).__name__,
+                str(e))
+            reporter.err_out(err_msg)
+            raise
+        reporter.info_out("Ansible version info:\n" + ansible_version_info, log_only=True)
 
-                    # 2G service needs to read some config data stored on app and no api exists to read this currently
-                    if not ansi_conf.is_second_gen_service:
-                        cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter)
+    def _execute_playbook(self, command_context, ansi_conf_json, cancellation_context, api, res_id, service_name,
+                          logger, reporter):
+        """
+        internal wrapper for execute action
+        :param ResourceCommandContext command_context:
+        :param str ansi_conf_json:
+        :param CancellationContext cancellation_context:
+        :param CloudShellAPISession api:
+        :param str res_id:
+        :param str service_name:
+        :param logging.Logger logger:
+        :param SandboxReporter reporter:
+        :return:
+        """
+        ansi_conf = AnsibleConfigurationParser(api).json_to_object(ansi_conf_json)
 
-                    # this step merges all global inputs to app params. App level params take precedence
-                    ansi_conf = merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs)
+        # sandbox details needed to find resource names not provided by server - needed to set live status
+        sandbox_details = api.GetReservationDetails(res_id, True).ReservationDescription
+        sb_resources = sandbox_details.Resources
+        sb_global_inputs = api.GetReservationInputs(res_id).GlobalInputs
 
-                    output_writer = ReservationOutputWriter(api, command_context)
-                    log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
-                    logger.debug(log_msg)
+        # this step does the IP lookup for resource names and populates data to conf host list
+        ansi_conf = find_resources_matching_addresses(sb_resources, ansi_conf, api, reporter)
 
-                    # FOR DEBUGGING PURPOSES TO CUT FLOW SHORT AND JUST INSPECT THE MANIPULATED ANSI_CONF JSON
-                    # output_writer.write(log_msg)
-                    # return
+        # populate log path attribute
+        if not ansi_conf.is_second_gen_service:
+            self._populate_log_path_attr_value(consts.MGMT_ANSIBLE_LOG_ATTR,
+                                               service_name,
+                                               api,
+                                               ansi_conf.hosts_conf,
+                                               reporter)
+        else:
+            self._populate_log_path_attr_value(consts.USER_ANSIBLE_LOG_ATTR,
+                                               service_name,
+                                               api,
+                                               ansi_conf.hosts_conf,
+                                               reporter)
 
-                    cancellation_sampler = CancellationSampler(cancellation_context)
+        # 2G service needs to read some config data stored on app and no api exists to read this currently
+        if not ansi_conf.is_second_gen_service:
+            cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter)
 
-                    with TempFolderScope(self.file_system, logger):
-                        # playbook is ultimate dependency, so let's get that first before polling the target hosts
-                        playbook_name = self._download_playbook(ansi_conf, service_name, cancellation_sampler, logger,
-                                                                reporter)
+        # this step merges all global inputs to app params. App level params take precedence
+        ansi_conf = merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs)
+        output_writer = ReservationOutputWriter(api, command_context)
+        log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
+        logger.debug(log_msg)
 
-                        # check that at least one host from list is reachable
-                        self._wait_for_all_hosts_to_be_deployed(ansi_conf, service_name, api, logger, reporter)
+        # FOR DEBUGGING PURPOSES TO CUT FLOW SHORT AND JUST INSPECT THE MANIPULATED ANSI_CONF JSON
+        # output_writer.write(log_msg)
+        # return
 
-                        # if all hosts failed health check throw exception and exit
-                        self._validate_host_connectivity(ansi_conf.hosts_conf, service_name, reporter)
+        cancellation_sampler = CancellationSampler(cancellation_context)
+        with TempFolderScope(self.file_system, logger):
+            # playbook is ultimate dependency, get that first before polling the target hosts
+            playbook_name = self._download_playbook(ansi_conf, service_name, cancellation_sampler, logger,
+                                                    reporter)
 
-                        # build auxiliary file dependencies for playbook
-                        self._add_ansible_config_file(logger)
-                        self._add_host_vars_files(ansi_conf, logger)
-                        self._add_inventory_file(ansi_conf, logger)
+            # check that at least one host from list is reachable
+            self._wait_for_all_hosts_to_be_deployed(ansi_conf, service_name, api, logger, reporter)
 
-                        # run the downloaded playbook against all hosts that passed connectivity check
-                        ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
-                                                                              cancellation_sampler,
-                                                                              logger, reporter, service_name)
+            # if all hosts failed health check throw exception and exit
+            self._validate_host_connectivity(ansi_conf.hosts_conf, service_name, reporter)
 
-                        # if failed set error status, if passed set green with run time info
-                        self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
-                                                                 run_time_seconds, api)
+            # build ansible auxiliary file dependencies for playbook
+            self._add_ansible_config_file(logger)
+            self._add_inventory_file(ansi_conf, logger)
+            self._add_host_vars_files(ansi_conf, logger)
 
-                        if ansible_result.failed_hosts:
-                            failed_hosts_json = ansible_result.failed_hosts_to_json()
-                            reporter.err_out("FAILED hosts in Ansible Service Execution")
-                            reporter.info_out("Failed hosts:\n{}".format(failed_hosts_json))
+            # run the downloaded playbook against all hosts that passed connectivity check
+            ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
+                                                                  cancellation_sampler,
+                                                                  logger, reporter, service_name)
 
-                            # for default playbooks store failed hosts to sandbox data to raise error at end of setup
-                            # 2G service can raise it's own exception
-                            if not ansi_conf.is_second_gen_service:
-                                set_failed_hosts_to_sandbox_data(service_name, failed_hosts_json, api, res_id, logger)
+            # if failed set live error status, if passed set green with run time info
+            self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
+                                                     run_time_seconds, api)
 
-                            failed_msg = "'{}' completed with failed hosts. See logs for details".format(service_name)
-                            return failed_msg
+            # on fail, store failed hosts json to sandbox data and return failed string without exception
+            if ansible_result.failed_hosts:
+                failed_hosts_json = ansible_result.failed_hosts_to_json()
+                reporter.err_out("FAILED hosts in Ansible Service Execution")
+                reporter.info_out("Failed hosts:\n{}".format(failed_hosts_json))
 
-                        success_msg = "'{}' completed SUCCESSFULLY for all hosts in {:.2f} seconds".format(service_name,
-                                                                                                           run_time_seconds)
-                        logger.info(success_msg)
-                        return success_msg
+                # if triggered from 2G service no need to store sandbox data
+                if not ansi_conf.is_second_gen_service:
+                    set_failed_hosts_to_sandbox_data(service_name, failed_hosts_json, api, res_id, logger)
+
+                failed_msg = "'{}' completed with failed hosts. See logs for details".format(service_name)
+                return failed_msg
+
+            success_msg = "'{}' completed SUCCESSFULLY for all hosts.".format(service_name)
+            logger.info(success_msg)
+            return success_msg
 
     def _add_ansible_config_file(self, logger):
         """
@@ -162,30 +221,35 @@ class AnsibleShell(object):
     def _add_inventory_file(self, ansi_conf, logger):
         """
         :type ansi_conf: AnsibleConfiguration
-        :type logger: Logger
+        :type logger: logging.Logger
         """
         with InventoryFile(self.file_system, self.INVENTORY_FILE_NAME, logger) as inventory:
             for host_conf in ansi_conf.hosts_conf:
                 if not host_conf.resource_name:
-                    logger.info(
-                        "skipping adding host to inventory file for '{}' due to Duplicate IP / missing resource name")
+                    logger.warn(
+                        "skipping adding host to inventory file for '{}' due to Duplicate IP / missing resource name".format(
+                            host_conf.ip))
                     continue
                 if not host_conf.health_check_passed:
-                    logger.info("skipping adding host to inventory file for '{}' due to failed connectivity check")
+                    logger.warn(
+                        "skipping adding host to inventory file for '{}' due to failed connectivity check".format(
+                            host_conf.resource_name))
                     continue
                 inventory.add_host_and_groups(host_conf.ip, host_conf.groups)
 
     def _add_host_vars_files(self, ansi_conf, logger):
         """
         :type ansi_conf: AnsibleConfiguration
-        :type logger: Logger
+        :type logger: logging.Logger
         """
         for host_conf in ansi_conf.hosts_conf:
             if not host_conf.resource_name:
-                logger.info("skipping host vars file for '{}' due to Duplicate IP / missing resource name")
+                logger.warn(
+                    "skipping host vars file for '{}' due to Duplicate IP / missing resource name".format(host_conf.ip))
                 continue
             if not host_conf.health_check_passed:
-                logger.info("skipping host vars file for '{}' due to failed connectivity check")
+                logger.warn(
+                    "skipping host vars file for '{}' due to failed connectivity check".format(host_conf.resource_name))
                 continue
 
             with HostVarsFile(self.file_system, host_conf.ip, logger) as file:
@@ -220,8 +284,8 @@ class AnsibleShell(object):
         # we need password field to be passed for gitlab auth tokens (which require token and not user)
         auth = HttpAuth(repo.username, repo.password) if repo.password else None
         reporter.info_out(
-            "Playbook DOWNLOADING from '{}' to ES '{}'".format(repo.url_netloc,
-                                                               self.execution_server_ip))
+            "Playbook DOWNLOADING from '{}' to ES '{}'..".format(repo.url_netloc,
+                                                                 self.execution_server_ip))
         start_time = default_timer()
         try:
             playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, auth, logger, cancellation_sampler)
@@ -233,7 +297,7 @@ class AnsibleShell(object):
             reporter.err_out(exc_msg)
             raise PlaybookDownloadException(exc_msg)
         download_seconds = default_timer() - start_time
-        completed_msg = "'{}' playbook download finished after '{:.2f}' seconds".format(service_name, download_seconds)
+        completed_msg = "Playbook download finished after '{:.2f}' seconds".format(download_seconds)
         reporter.info_out(completed_msg)
         return playbook_name
 
@@ -248,8 +312,6 @@ class AnsibleShell(object):
         :type reporter: SandboxReporter
         :type str service_name:
         """
-        reporter.info_out("'{}' executing the playbook '{}'...".format(service_name, playbook_name))
-
         start_time = default_timer()
         output, error = self.executor.execute_playbook(
             playbook_name, self.INVENTORY_FILE_NAME, ansi_conf.additional_cmd_args, output_writer, logger,
@@ -259,7 +321,7 @@ class AnsibleShell(object):
 
         ansible_result = AnsibleResult(output, error, ansi_conf.hosts_conf)
 
-        # swallowing error here from going to server and failing all hosts
+        # STOPPING error here from going to server and failing all hosts
         # if not ansible_result.success:
         #     raise AnsibleException(ansible_result.to_json())
 
@@ -276,8 +338,7 @@ class AnsibleShell(object):
         :param SandboxReporter reporter:
         :return:
         """
-        wait_for_deploy_msg = "'{}' checking CONNECTIVITY to all hosts from ES '{}'...".format(service_name,
-                                                                                               self.execution_server_ip)
+        wait_for_deploy_msg = "'{}' checking CONNECTIVITY to all hosts...".format(service_name)
 
         # timeout_minutes = ansi_conf.timeout_minutes
 
@@ -287,23 +348,21 @@ class AnsibleShell(object):
         reporter.info_out(wait_for_deploy_msg)
         for host in ansi_conf.hosts_conf:
             if not host.resource_name:
-                skip_message = "Skipping health check for host '{}' due to duplicate IP error".format(host.ip)
+                skip_message = "Skipping health check for '{}' due to duplicate IP issue".format(host.ip)
                 reporter.warn_out(skip_message)
                 continue
 
             ansible_port = self.ansible_connection_helper.get_ansible_port(host)
 
-            if HostVarsFile.ANSIBLE_PORT in host.parameters.keys() and (
-                    host.parameters[HostVarsFile.ANSIBLE_PORT] != '' and
-                    host.parameters[HostVarsFile.ANSIBLE_PORT] is not None):
-                ansible_port = host.parameters[HostVarsFile.ANSIBLE_PORT]
+            # user can overwrite ansible port by passing in custom 'ansible_port' param on app
+            custom_ansible_port = host.parameters.get(HostVarsFile.ANSIBLE_PORT)
+            if custom_ansible_port:
+                ansible_port = custom_ansible_port
 
-            port_ansible_port = "Connectivity Timeout: {} minutes, Ansible port: {}".format(timeout_minutes,
-                                                                                            ansible_port)
-
-            reporter.info_out("Trying to connect to resource '{}', IP '{}'".format(host.resource_name, host.ip))
-            reporter.info_out(port_ansible_port)
-
+            reporter.info_out("Connecting to '{}', IP: {}, Port: {}, Timeout Minutes: {}".format(host.resource_name,
+                                                                                                 host.ip,
+                                                                                                 ansible_port,
+                                                                                                 timeout_minutes))
             try:
                 self.connection_service.check_connection(logger, host, ansible_port=ansible_port,
                                                          timeout_minutes=timeout_minutes)
@@ -349,6 +408,33 @@ class AnsibleShell(object):
                 api.SetResourceLiveStatus(resourceFullName=host.resource_name,
                                           liveStatusName="Online",
                                           additionalInfo=live_status_msg)
+
+    @staticmethod
+    def _populate_log_path_attr_value(target_log_attr, service_name, api, hosts_conf, reporter):
+        """
+
+        :param self:
+        :param str target_log_attr:
+        :param str service_name:
+        :param CloudShellAPISession api:
+        :param list[HostConfiguration] hosts_conf:
+        :param SandboxReporter reporter:
+        :return:
+        """
+        reporter.info_out("Setting log path attribute for '{}'".format(target_log_attr))
+        for curr_host in hosts_conf:
+            resource_name = curr_host.resource_name
+            try:
+                api.SetAttributeValue(resourceFullPath=resource_name,
+                                      attributeName=target_log_attr,
+                                      attributeValue=service_name)
+            except Exception as e:
+                reporter.err_out("Error setting '{}' attribute for resource '{}'. {}: {}".format(target_log_attr,
+                                                                                                 curr_host.resource_name,
+                                                                                                 type(e).__name__,
+                                                                                                 str(e)))
+            else:
+                reporter.info_out("Log path attributes set successfully", log_only=True)
 
     def _validate_host_connectivity(self, ansi_conf_list, service_name, reporter):
         """

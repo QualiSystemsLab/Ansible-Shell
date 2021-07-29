@@ -1,4 +1,4 @@
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, check_output
 import time
 import os
 from logging import Logger
@@ -10,6 +10,7 @@ from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult
 from cloudshell.shell.core.context import ResourceCommandContext
 from cloudshell.cm.ansible.domain.stdout_accumulator import StdoutAccumulator, StderrAccumulator
 from Helpers.html_print_wrappers import warn_span
+from exceptions import AnsibleNotFoundException
 
 
 class AnsibleCommandExecutor(object):
@@ -150,6 +151,17 @@ class AnsibleCommandExecutor(object):
         if args:
             command += " " + args
         return command
+
+    @staticmethod
+    def get_ansible_version_data(execution_server_ip):
+        command = "ansible --version"
+        process = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+        outp, err_outp = process.communicate()
+        if "command not found" in err_outp:
+            exc_msg = "Ansible not found on ES '{}'.\nCheck version output: {}".format(execution_server_ip,
+                                                                                       err_outp)
+            raise AnsibleNotFoundException(exc_msg)
+        return outp
 
     @staticmethod
     def _convert_text(playbook_name, txt_lines, converter, output_writer, logger):

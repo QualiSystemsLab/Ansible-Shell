@@ -33,20 +33,20 @@ class WindowsConnectionService(IVMConnectionService):
     def check_connection(self, target_host, logger, ansible_port):
 
         ip = target_host.ip + ":" + ansible_port if ansible_port else target_host.ip
-        logger.info("Session IP: " + ip)
+        logger.debug("Session IP: " + ip)
 
-        logger.info("Creating a session.")
+        logger.debug("Creating a session.")
         if target_host.connection_secured:
-            logger.info("session connection_secured=True")
+            logger.debug("session connection_secured=True")
             session = winrm.Session(ip, auth=(target_host.username, target_host.password), transport='ssl')
         else:
-            logger.info("session connection_secured=False")
+            logger.debug("session connection_secured=False")
             session = winrm.Session(ip, auth=(target_host.username, target_host.password))
 
-        logger.info("Session created.")
+        logger.debug("Session created.")
 
         try:
-            logger.info("test connection")
+            logger.debug("test connection")
             uid = str(uuid4())
             result = session.run_cmd('@echo ' + uid)
             assert uid in result.std_out
@@ -71,11 +71,11 @@ class LinuxConnectionService(IVMConnectionService):
         :return:
         """
         try:
-            logger.info("Creating a session.")
+            logger.debug("Creating a session.")
 
             session = SSHClient()
             session.set_missing_host_key_policy(AutoAddPolicy())
-            logger.info("Test connection")
+            logger.debug("Test connection")
             if target_host.password:
                 session.connect(target_host.ip, port=ansible_port, username=target_host.username,
                                 password=target_host.password)
@@ -106,7 +106,7 @@ class ConnectionService(object):
 
         :param timeout_minutes:
         :param ansible_port:
-        :param Logger logger:
+        :param logging.Logger logger:
         :param cloudshell.cm.ansible.domain.ansible_configuration.HostConfiguration target_host:
         :return:
         """
@@ -123,9 +123,9 @@ class ConnectionService(object):
         start_time = time.time()
         while True:
             try:
-                logger.info("check connection")
+                logger.debug("check connection")
                 if target_host.connection_method == 'winrm':
-                    logger.info("Check connection on windows")
+                    logger.debug("Check connection on windows")
 
                     self.windowsConnectionService.check_connection(target_host=target_host,
                                                                    logger=logger,
@@ -133,7 +133,7 @@ class ConnectionService(object):
 
                     logger.info("Done checking connection on windows")
                 else:
-                    logger.info("Check connection on linux")
+                    logger.debug("Check connection on linux")
                     self.linuxConnectionService.check_connection(target_host=target_host,
                                                                  logger=logger,
                                                                  ansible_port=int(ansible_port))

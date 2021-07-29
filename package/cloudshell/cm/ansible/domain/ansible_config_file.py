@@ -4,7 +4,7 @@ from logging import Logger
 import os
 from collections import OrderedDict
 import re
-from cloudshell.cm.ansible.domain.exceptions import AnsibleDriverException
+from cloudshell.cm.ansible.domain.exceptions import AnsibleDriverException, AnsibleConfigNotFoundException
 
 
 class AnsibleConfigFile(object):
@@ -53,7 +53,9 @@ def _read_user_ansible_cfg():
     :return:
     """
     process = Popen("ansible-config view", shell=True, stdout=PIPE, stderr=PIPE)
-    outp = process.stdout.read()
+    outp, err_outp = process.communicate()
+    if err_outp:
+        raise AnsibleConfigNotFoundException("Can't read ansible config. Error output: {}".format(err_outp))
     return outp
 
 
@@ -86,7 +88,7 @@ def _build_config_keys_from_user_cfg(input_cfg_text):
             continue
 
         if curr_cfg_stanza:
-            key, value = [x.strip() for x in line.split("=")]
+            key, value = [x.strip() for x in line.split("=", 1)]
             config_keys[curr_cfg_stanza][key] = value
 
     return config_keys
@@ -111,7 +113,7 @@ def _cfg_lines_to_password_masked_lines(cfg_lines_list):
     result = []
     for curr_line in cfg_lines_list:
         if "=" in curr_line:
-            key, value = [x.strip() for x in curr_line.split("=")]
+            key, value = [x.strip() for x in curr_line.split("=", 1)]
             if "pass" in key:
                 value = "********"
             curr_line = key + " = " + value
@@ -127,15 +129,19 @@ def get_user_ansible_cfg_config_keys(logger):
     """
     try:
         ansible_cfg_output = _read_user_ansible_cfg()
+    except AnsibleConfigNotFoundException as e:
+        err_msg = "Ansible Config Not found. {}: {}".format(type(e).__name__, str(e))
+        logger.warn(err_msg)
+        return None
     except Exception as e:
-        exc_msg = "Issue READING user ansible.cfg"
+        exc_msg = "Issue READING user ansible.cfg. {}: {}".format(type(e).__name__, str(e))
         logger.error(exc_msg)
         raise AnsibleDriverException(exc_msg)
 
     try:
         config_keys = _build_config_keys_from_user_cfg(ansible_cfg_output)
     except Exception as e:
-        exc_msg = "Issue PROCESSING user ansible.cfg"
+        exc_msg = "Issue PROCESSING user ansible.cfg. {}: {}".format(type(e).__name__, str(e))
         logger.error(exc_msg)
         raise AnsibleDriverException(exc_msg)
 
@@ -162,6 +168,22 @@ key_2 = val_2
 [ssh_connections]
 key_1 = val_1
 key_3 = val_3
+    """
+    sample_config = """
+[defaults]
+host_key_checking = false
+forks = 50
+nocows = 1
+deprecation_warnings = false
+system_warnings = false
+
+[persistent_connection]
+commmand_timeout = 30
+connect_timeout = 60
+
+[ssh_connection]
+ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+#ssh_args = -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o CheckHostIP=no -o UpdateHostKeys=no -o LogLevel=quiet
     """
     my_config_keys = _build_config_keys_from_user_cfg(sample_config)
     lines = _cfg_config_keys_to_lines_list(my_config_keys)

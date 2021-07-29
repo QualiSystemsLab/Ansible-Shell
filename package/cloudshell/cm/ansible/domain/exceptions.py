@@ -12,3 +12,11 @@ class PlaybookDownloadException(Exception):
 
 class AnsibleFailedConnectivityException(Exception):
     pass
+
+
+class AnsibleNotFoundException(Exception):
+    pass
+
+
+class AnsibleConfigNotFoundException(Exception):
+    pass
