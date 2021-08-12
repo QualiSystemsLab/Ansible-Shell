@@ -1,0 +1,3 @@
+class AnsibleSecondGenServiceException(Exception):
+    pass
+

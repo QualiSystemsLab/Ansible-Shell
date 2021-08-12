@@ -1,11 +1,40 @@
-from models import CachedAnsibleConfiguration, PlaybookRepoDetails, HostConfiguration
+from ansible_second_gen_commands.service_globals import user_pb_params
 import json
 
-# USER PLAYBOOK PARAMS - DEFINED AS PARAMETERS ON APPS
-REPO_URL_PARAM = "REPO_URL"
-REPO_USERNAME_PARAM = "REPO_USERNAME"
-REPO_PASSWORD_PARAM = "REPO_PASSWORD"
-INVENTORY_GROUPS_PARAM = "INVENTORY_GROUPS"
+
+class CachedAnsibleConfiguration(object):
+    def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
+        """
+        :type playbook_repo: PlaybookRepoDetails
+        :type hosts_conf: list[HostConfiguration]
+        :type additional_cmd_args: str
+        :type timeout_minutes: float
+        """
+        self.timeout_minutes = timeout_minutes or 0.0
+        self.playbook_repo = playbook_repo or PlaybookRepoDetails()
+        self.hosts_conf = hosts_conf or []
+        self.additional_cmd_args = additional_cmd_args
+        self.is_second_gen_service = False
+
+
+class PlaybookRepoDetails(object):
+    """ the cached sandbox data object has password already decrypted """
+    def __init__(self, url=None, username=None, decrypted_password=None):
+        self.url = url
+        self.username = username
+        self.decrypted_password = decrypted_password
+
+
+class HostConfiguration(object):
+    def __init__(self):
+        self.ip = None
+        self.connection_method = None
+        self.connection_secured = None
+        self.username = None
+        self.password = None
+        self.access_key = None
+        self.groups = []
+        self.parameters = {}
 
 
 def get_cached_ansible_config_from_json(input_json):
@@ -53,9 +82,9 @@ def get_cached_user_pb_repo_data(cached_ansible_conf):
     params_dict = cached_ansible_conf.hosts_conf[0].parameters
 
     repo = PlaybookRepoDetails()
-    repo.url = params_dict.get(REPO_URL_PARAM)
-    repo.username = params_dict.get(REPO_USERNAME_PARAM)
-    repo.decrypted_password = params_dict.get(REPO_PASSWORD_PARAM)
+    repo.url = params_dict.get(user_pb_params.REPO_URL_PARAM)
+    repo.username = params_dict.get(user_pb_params.REPO_USERNAME_PARAM)
+    repo.decrypted_password = params_dict.get(user_pb_params.REPO_PASSWORD_PARAM)
     return repo
 
 
@@ -66,7 +95,7 @@ def get_cached_user_pb_inventory_groups_str(cached_ansible_conf):
     :return:
     """
     params_dict = cached_ansible_conf.hosts_conf[0].parameters
-    return params_dict.get(INVENTORY_GROUPS_PARAM)
+    return params_dict.get(user_pb_params.INVENTORY_GROUPS_PARAM)
 
 
 def get_cached_mgmt_pb_inventory_groups_list(cached_ansible_conf):

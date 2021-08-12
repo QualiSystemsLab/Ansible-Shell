@@ -2,7 +2,8 @@ import json
 
 """
 These data model keys are what is expected by package driver when parsing
-These are same keys that server sends with it's request
+These are same keys that Quali server sends with it's request
+Note the camelCase of attributes, these are dumped directly to json
 """
 
 
