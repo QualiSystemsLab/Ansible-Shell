@@ -7,7 +7,7 @@ These are same keys that server sends with it's request
 
 
 class AnsibleConfigurationRequest2G(object):
-    def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes = None):
+    def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
         """
         :type playbook_repo: PlaybookRepository
         :type hosts_conf: list[HostConfigurationRequest2G]
@@ -33,6 +33,7 @@ class PlaybookRepository(object):
 
 
 class HostConfigurationRequest2G(object):
+    """ camelCase attributes are reserved JSON keys, snake_case is extra added member """
     def __init__(self):
         self.ip = None
         self.connectionMethod = None
@@ -42,4 +43,4 @@ class HostConfigurationRequest2G(object):
         self.accessKey = None
         self.groups = None
         self.parameters = None
-
+        self.resource_name = None
