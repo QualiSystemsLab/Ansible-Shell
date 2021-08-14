@@ -125,7 +125,7 @@ class ConnectionService(object):
             try:
                 logger.debug("check connection")
                 if target_host.connection_method == 'winrm':
-                    logger.debug("Check connection on windows")
+                    logger.info("Check connection on windows")
 
                     self.windowsConnectionService.check_connection(target_host=target_host,
                                                                    logger=logger,
@@ -133,7 +133,7 @@ class ConnectionService(object):
 
                     logger.info("Done checking connection on windows")
                 else:
-                    logger.debug("Check connection on linux")
+                    logger.info("Check connection on linux")
                     self.linuxConnectionService.check_connection(target_host=target_host,
                                                                  logger=logger,
                                                                  ansible_port=int(ansible_port))

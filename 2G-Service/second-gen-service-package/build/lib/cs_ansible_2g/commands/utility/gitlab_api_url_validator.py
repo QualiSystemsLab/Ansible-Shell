@@ -32,7 +32,7 @@ def validate_full_path_gitlab_url(url):
         raise Exception("Gitlab Base Path validation failed. Should be of form '{}'".format(BASE_PATH_SAMPLE))
 
     # VALIDATE ENTIRE GITLAB URL STRING
-    gitlab_api_pattern = "https?://.+/api/v\d+/projects/\d/repository/files/.+/raw\?ref=.+"
+    gitlab_api_pattern = "https?://.+/api/v\d/projects/\d+/repository/files/.+/raw\?ref=.+"
     matching = re.match(gitlab_api_pattern, url)
     if not matching:
         sample_url = "http://<SERVER_IP>/api/4/projects/<PROJECT_ID>/repository/files/<PROJECT_PATH>/raw?ref=<GIT_BRANCH>"

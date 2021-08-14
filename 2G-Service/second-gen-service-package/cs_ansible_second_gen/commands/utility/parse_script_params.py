@@ -48,7 +48,7 @@ def handle_json_list_params(input_str):
     return results
 
 
-def build_params_list(input_str):
+def _build_params_list(input_str):
     if not input_str:
         return []
 
@@ -71,6 +71,6 @@ if __name__ == "__main__":
               '{"people_list": [{"name": "natti", "age": 33},{"name": "James", "age": 35}]}']
     for index, input in enumerate(inputs):
         print("=== test {} ===".format(index + 1))
-        my_params_list = build_params_list(input)
+        my_params_list = _build_params_list(input)
         pprint(my_params_list)
         pass

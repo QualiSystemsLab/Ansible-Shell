@@ -8,6 +8,7 @@ Note the camelCase of attributes, these are dumped directly to json
 
 
 class AnsibleConfigurationRequest2G(object):
+    """ build, convert to json, and send to cm-ansible package command """
     def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
         """
         :type playbook_repo: PlaybookRepository
@@ -35,6 +36,7 @@ class PlaybookRepository(object):
 
 class HostConfigurationRequest2G(object):
     """ camelCase attributes are reserved JSON keys, snake_case is extra added member """
+
     def __init__(self):
         self.ip = None
         self.connectionMethod = None
@@ -45,3 +47,24 @@ class HostConfigurationRequest2G(object):
         self.groups = None
         self.parameters = None
         self.resource_name = None
+
+
+class GenericAnsibleServiceData(object):
+    """ generic data structure to be populated from the admin and regular service attributes """
+
+    def __init__(self, service_name, connection_method, inventory_groups, script_parameters, additional_args,
+                 timeout_minutes, config_selector, repo_user, repo_password, repo_url, repo_base_path,
+                 repo_script_path, gitlab_branch):
+        self.service_name = service_name
+        self.connection_method = connection_method
+        self.inventory_groups = inventory_groups
+        self.script_parameters = script_parameters
+        self.additional_args = additional_args
+        self.timeout_minutes = timeout_minutes
+        self.config_selector = config_selector
+        self.repo_user = repo_user
+        self.repo_password = repo_password
+        self.repo_url = repo_url
+        self.repo_base_path = repo_base_path
+        self.repo_script_path = repo_script_path
+        self.gitlab_branch = gitlab_branch

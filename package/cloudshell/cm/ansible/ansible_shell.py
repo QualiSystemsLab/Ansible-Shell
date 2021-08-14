@@ -31,6 +31,7 @@ from cloudshell.api.cloudshell_api import CloudShellAPISession
 from cloudshell.cm.ansible.domain.Helpers.execution_server_info import get_first_nic_ip
 import cloudshell.cm.ansible.domain.driver_globals as consts
 from timeit import default_timer
+from cloudshell.cm.ansible.domain.Helpers.open_ssl_allow import crypto_allow_openssl
 
 
 class AnsibleShell(object):
@@ -134,8 +135,10 @@ class AnsibleShell(object):
         sb_resources = sandbox_details.Resources
         sb_global_inputs = api.GetReservationInputs(res_id).GlobalInputs
 
-        # this step does the IP lookup for resource names and populates data to conf host list
-        ansi_conf = find_resources_matching_addresses(sb_resources, ansi_conf, api, reporter)
+        if not ansi_conf.is_second_gen_service:
+            # lookup for resource names from IP given by server request
+            # 2G service sends the resource name in the json request, so no need for lookup
+            ansi_conf = find_resources_matching_addresses(sb_resources, ansi_conf, api, reporter)
 
         # populate log path attribute
         if not ansi_conf.is_second_gen_service:
@@ -171,6 +174,7 @@ class AnsibleShell(object):
             playbook_name = self._download_playbook(ansi_conf, service_name, cancellation_sampler, logger,
                                                     reporter)
 
+            crypto_allow_openssl()
             # check that at least one host from list is reachable
             self._wait_for_all_hosts_to_be_deployed(ansi_conf, service_name, api, logger, reporter)
 
@@ -367,10 +371,11 @@ class AnsibleShell(object):
                 self.connection_service.check_connection(logger, host, ansible_port=ansible_port,
                                                          timeout_minutes=timeout_minutes)
             except Exception as e:
-                err_msg = "Connectivity Check FAILED to resource '{}', IP '{}'. Exception: '{}'".format(host.ip,
-                                                                                                        host.resource_name,
-                                                                                                        str(e))
-                reporter.err_out(err_msg)
+                err_msg = "Connectivity Check FAILED to '{}', IP '{}'. Exception '{}': {}".format(host.ip,
+                                                                                                  host.resource_name,
+                                                                                                  type(e).__name__,
+                                                                                                  str(e))
+                reporter.exc_out(err_msg)
                 api.SetResourceLiveStatus(resourceFullName=host.resource_name,
                                           liveStatusName="Error",
                                           additionalInfo=err_msg)

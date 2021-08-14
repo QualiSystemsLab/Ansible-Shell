@@ -1,4 +1,4 @@
-from ansible_second_gen_commands.service_globals import user_pb_params
+from cs_ansible_second_gen.service_globals import user_pb_params
 import json
 
 

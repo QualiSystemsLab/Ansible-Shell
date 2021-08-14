@@ -1,2 +1,1 @@
-cloudshell-shell-core>=3.1.0,<3.2.0
-cloudshell-cm-ansible>=1.5.0,<1.6.0
+cs-ansible-second-gen>=2.0.0,<3.0.0

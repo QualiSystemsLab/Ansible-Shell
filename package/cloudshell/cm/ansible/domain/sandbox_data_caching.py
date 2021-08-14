@@ -6,11 +6,11 @@ from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporte
 from cloudshell.cm.ansible.domain.driver_globals import ANSIBLE_MGMT_FAILED_PREFIX
 
 
-class DuplicateAddressException(Exception):
+class AnsibleDuplicateAddressException(Exception):
     pass
 
 
-class MatchingAddressNotFoundException(Exception):
+class AnsibleMatchingAddressNotFoundException(Exception):
     pass
 
 
@@ -31,11 +31,11 @@ def _get_resource_name_from_ip(sandbox_resources, ansi_conf_host_ip, api, report
             api.SetResourceLiveStatus(resourceFullName=curr_resource_name,
                                       liveStatusName="Error",
                                       additionalInfo=err_msg)
-        raise DuplicateAddressException(err_msg)
+        raise AnsibleDuplicateAddressException(err_msg)
     if not matching_resource_search:
         err_msg = "No resource on canvas matching IP: {}".format(ansi_conf_host_ip)
         reporter.err_out(err_msg)
-        raise MatchingAddressNotFoundException(err_msg)
+        raise AnsibleMatchingAddressNotFoundException(err_msg)
     return matching_resource_search[0].Name
 
 
