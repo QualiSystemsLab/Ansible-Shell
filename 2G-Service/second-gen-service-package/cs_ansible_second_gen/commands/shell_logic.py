@@ -1,18 +1,19 @@
 import json
 from cloudshell.core.logger.qs_logger import get_qs_logger
 from cs_ansible_second_gen.commands.utility.gitlab_api_url_validator import is_base_path_gitlab_api
-from cs_ansible_second_gen.commands.utility.parse_script_params import _build_params_list
+from cs_ansible_second_gen.commands.utility.parse_script_params import build_params_list
 from cs_ansible_second_gen.commands.utility.resource_helpers import get_resource_attribute_gen_agostic
 from cs_ansible_second_gen.commands.utility.sandbox_reporter import SandboxReporter
 from cs_ansible_second_gen.commands.utility.shell_connector_helpers import get_connector_endpoints
 from cs_ansible_second_gen.commands.utility.validate_protocols import is_path_supported_protocol
 from cs_ansible_second_gen.exceptions.exceptions import AnsibleSecondGenServiceException
 from cs_ansible_second_gen.models.ansible_config_from_cached_json import get_cached_ansible_config_from_json, \
-    get_cached_mgmt_pb_inventory_groups_list, get_cached_user_pb_inventory_groups_str, PlaybookRepoDetails
+    get_cached_mgmt_pb_inventory_groups_list, get_cached_user_pb_inventory_groups_str, PlaybookRepoDecryptedPassword, \
+    CachedAnsibleConfiguration
 from cs_ansible_second_gen.models.ansible_configuration_request import AnsibleConfigurationRequest2G, \
-    GenericAnsibleServiceData, HostConfigurationRequest2G
-from cs_ansible_second_gen.service_globals import user_pb_params, override_attributes
-from cloudshell.api.cloudshell_api import CloudShellAPISession
+    GenericAnsibleServiceData, HostConfigurationRequest2G, PlaybookRepository
+from cs_ansible_second_gen.service_globals import user_pb_params, override_attributes, utility_globals
+from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
 
 
 class AnsibleSecondGenLogic(object):
@@ -139,7 +140,7 @@ class AnsibleSecondGenLogic(object):
 
         if not service_name.startswith("PB_"):
             raise AnsibleSecondGenServiceException(
-                "User Playbook alias does not start wit PB. Current Alias: {}".format(service_name))
+                "User Playbook alias does not start with PB. Current Alias: {}".format(service_name))
 
         resource_name = service_name.split("PB_")[1]
 
@@ -257,7 +258,7 @@ class AnsibleSecondGenLogic(object):
 
         return url
 
-    def get_repo_details(self, api, playbook_path, reporter, service_data, supported_protocols):
+    def get_repo_details(self, playbook_path, reporter, service_data, supported_protocols):
         """
         :param api:
         :param playbook_path:
@@ -267,7 +268,7 @@ class AnsibleSecondGenLogic(object):
         :return:
         """
         repo_user = service_data.repo_user
-        repo_password = api.DecryptPassword(service_data.repo_password).Value
+        repo_password = service_data.repo_password
         repo_url = self.build_repo_url(service_full_url=service_data.repo_url,
                                        service_url_base_path=service_data.repo_base_path,
                                        service_pb_relative_path=service_data.repo_script_path,
@@ -275,7 +276,7 @@ class AnsibleSecondGenLogic(object):
                                        supported_protocols=supported_protocols,
                                        reporter=reporter,
                                        gitlab_branch=service_data.gitlab_branch)
-        repo_details = PlaybookRepoDetails(repo_url, repo_user, repo_password)
+        repo_details = PlaybookRepository(repo_url, repo_user, repo_password)
         return repo_details
 
     @staticmethod
@@ -325,134 +326,94 @@ class AnsibleSecondGenLogic(object):
                     selector_linked_resources.append(resource.Name)
         return selector_linked_resources
 
-    def get_ansible_config_json(self, service_data, api, reporter, target_host_resources, repo_details,
-                                script_params=""):
+    def get_ansible_config_json(self, service_data, target_host_resources,  repo_details, reporter,
+                                cmd_input_params=""):
         """
         Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
         :param GenericAnsibleServiceData service_data:
-        :param CloudShellAPISession api:
-        :param SandboxReporter reporter:
         :param list[ResourceInfo] target_host_resources: resources to run playbook against
-        :param PlaybookRepoDetails repo_details:
-        :param str script_params:
+        :param PlaybookRepository repo_details:
+        :param SandboxReporter reporter:
+        :param str cmd_input_params:
         :return:
         """
         # REPORT TARGET RESOURCES
-        resource_names = [x.Name for x in target_host_resources]
-        start_msg = "'{}' Target Hosts :\n{}".format(service_data.service_name, json.dumps(resource_names, indent=4))
-        reporter.info_out(start_msg)
+        self._log_resource_names(reporter, service_data, target_host_resources)
 
-        # INITIALIZE CONFIG REQUEST DATA MODEL
+        # BUILD CONFIG REQUEST OBJECT
         ansi_conf = AnsibleConfigurationRequest2G()
+        self._populate_top_level_ansi_conf(ansi_conf, repo_details, service_data)
 
-        # START POPULATING REQUEST OBJECT
-        ansi_conf.additionalArgs = service_data.additional_args if service_data.additional_args else None
-        ansi_conf.timeoutMinutes = int(service_data.timeout_minutes) if service_data.timeout_minutes else 0
-
-        # REPO DETAILS - REPO PASSWORD EXPECTED AS PLAIN TEXT DECRYPTED STRING
-        ansi_conf.repositoryDetails.url = repo_details.url
-        ansi_conf.repositoryDetails.username = repo_details.username
-        ansi_conf.repositoryDetails.password = repo_details.decrypted_password
-
-        script_params_2g = self._get_script_params_list(script_params, service_data)
-
-        """ START POPULATING HOSTS IN LOOP """
-        missing_credential_hosts = []
+        # TODO:
+        # add logic into separate function for cached playbook actions
         for curr_resource_obj in target_host_resources:
-            curr_resource_name = curr_resource_obj.Name
-
             # START BUILDING REQUEST
             host_conf = HostConfigurationRequest2G()
-            host_conf.ip = curr_resource_obj.Address
-            host_conf.resource_name = curr_resource_name
-
-            # USER ATTR FROM LOGICAL RESOURCE
-            attrs = curr_resource_obj.ResourceAttributes
-            user_attr = get_resource_attribute_gen_agostic("User", attrs)
-            user_attr_val = user_attr.Value if user_attr else ""
-            host_conf.username = user_attr_val
-
-            # HOST PASSWORD EXPECTED AS ENCRYPTED VALUE
-            password_attr = get_resource_attribute_gen_agostic("Password", attrs)
-            encrypted_password_val = password_attr.Value
-            host_conf.password = encrypted_password_val
-
-            # ACCESS KEY - THIS ATTRIBUTE HAS TO BE CREATED ON LOGICAL RESOURCE - SHOULD BE ENCRYPTED PASSWORD ATTR
-            access_key_attr = get_resource_attribute_gen_agostic(override_attributes.ACCESS_KEY_ATTR, attrs)
-            encrypted_access_key_val = access_key_attr.Value if access_key_attr else None
-            host_conf.accessKey = encrypted_access_key_val
-
-            # VALIDATE HOST CREDENTIALS - NEED USER AND PASSWORD/ACCESS KEY
-            if user_attr_val:
-                decrypted_password = api.DecryptPassword(encrypted_password_val).Value
-                if encrypted_access_key_val:
-                    decrypted_access_key = api.DecryptPassword(encrypted_access_key_val).Value
-                else:
-                    decrypted_access_key = None
-
-                if not decrypted_password and not decrypted_access_key:
-                    missing_credential_hosts.append((curr_resource_name, "Missing Password / Access Key"))
-            else:
-                missing_credential_hosts.append((curr_resource_name, "Empty User Attribute on Resource"))
-
-            # INVENTORY GROUPS
-            resource_ansible_group_attr = get_resource_attribute_gen_agostic(override_attributes.INVENTORY_GROUP_ATTR,
-                                                                             attrs)
-            if resource_ansible_group_attr and resource_ansible_group_attr.Value:
-                groups_str = resource_ansible_group_attr.Value
-                inventory_groups_list = groups_str.strip().split(",")
-            else:
-                inventory_groups_list = None
-
-            host_conf.groups = inventory_groups_list
-
-            # CONNECTION METHOD
-            resource_attr_connection_method = None
-            connection_method_attr = get_resource_attribute_gen_agostic(override_attributes.CONNECTION_METHOD_ATTR,
-                                                                        attrs)
-            if connection_method_attr:
-                connection_val = connection_method_attr.Value
-                if connection_val:
-                    if connection_val.lower() not in ["na", "n/a"]:
-                        resource_attr_connection_method = connection_val
-
-            if resource_attr_connection_method:
-                host_conf.connectionMethod = resource_attr_connection_method
-            else:
-                host_conf.connectionMethod = service_connection_method
-
-            # CONNECTION SECURED
-            connection_secured_attr = get_resource_attribute_gen_agostic(override_attributes.CONNECTION_SECURED_ATTR,
-                                                                         attrs)
-            if connection_secured_attr:
-                host_conf.connectionSecured = True if connection_secured_attr.Value.lower() == "true" else False
-            else:
-                host_conf.connectionSecured = False
-
-            # SCRIPT PARAMS
-            script_params_attr = get_resource_attribute_gen_agostic(override_attributes.SCRIPT_PARAMS_ATTR, attrs)
-            if script_params_attr:
-                if script_params_attr.Value:
-                    host_conf.parameters = _build_params_list(script_params_attr.Value)
-                else:
-                    host_conf.parameters = script_params_2g
-            else:
-                host_conf.parameters = script_params_2g
+            host_conf = self._populate_host_conf(host_conf, curr_resource_obj, service_data, cmd_input_params)
             ansi_conf.hostsDetails.append(host_conf)
 
-        """ END FOR LOOP """
+        ansi_conf_json = ansi_conf.get_pretty_json()
+        self._log_ansi_conf_with_masked_password(ansi_conf_json, reporter)
+        return ansi_conf_json
 
-        # VALIDATE MISSING CREDENTIALS ON HOSTS
-        if missing_credential_hosts:
-            missing_json = json.dumps(missing_credential_hosts, indent=4)
-            warning_msg = "=== '{}' Connected Hosts Missing Credentials ===\n{}".format(service_name, missing_json)
-            reporter.info_out(warning_msg)
-            err_msg = "Missing credentials on target hosts. See console / logs for info."
-            raise Exception(err_msg)
+    def get_cached_ansible_mgmt_config_json(self, service_data, target_resource, repo_details, cached_config, reporter):
+        """
+        Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
+        :param GenericAnsibleServiceData service_data:
+        :param ResourceInfo target_resource:
+        :param PlaybookRepoDecryptedPassword repo_details:
+        :param CachedAnsibleConfiguration cached_config:
+        :param SandboxReporter reporter:
+        :return:
+        """
+        # BUILD CONFIG REQUEST OBJECT
+        ansi_conf = AnsibleConfigurationRequest2G()
+        self._populate_top_level_mgmt_ansi_conf(ansi_conf, repo_details, service_data, cached_config)
+
+        # START BUILDING REQUEST FOR SINGLE HOST
+        host_conf = HostConfigurationRequest2G()
+        host_conf = self._populate_host_conf(host_conf, target_resource, service_data)
+        ansi_conf.hostsDetails.append(host_conf)
 
         ansi_conf_json = ansi_conf.get_pretty_json()
+        self._log_ansi_conf_with_masked_password(ansi_conf_json, reporter)
+        return ansi_conf_json
 
-        # HIDE REPO PASSWORDS IN JSON OUTPUT
+    def get_cached_ansible_user_pb_config_json(self, service_data, target_resource, repo_details, cached_config, reporter):
+        """
+        Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
+        :param GenericAnsibleServiceData service_data:
+        :param ResourceInfo target_resource:
+        :param PlaybookRepoDecryptedPassword repo_details:
+        :param CachedAnsibleConfiguration cached_config:
+        :param SandboxReporter reporter:
+        :return:
+        """
+        # BUILD CONFIG REQUEST OBJECT
+        ansi_conf = AnsibleConfigurationRequest2G()
+        self._populate_top_level_user_pb_ansi_conf(ansi_conf, repo_details, service_data, cached_config)
+
+        # START BUILDING REQUEST FOR SINGLE HOST
+        host_conf = HostConfigurationRequest2G()
+        host_conf = self._populate_user_pb_host_conf(host_conf, target_resource, service_data, cached_config)
+        ansi_conf.hostsDetails.append(host_conf)
+
+        ansi_conf_json = ansi_conf.get_pretty_json()
+        self._log_ansi_conf_with_masked_password(ansi_conf_json, reporter)
+        return ansi_conf_json
+
+    def _log_resource_names(self, reporter, service_data, target_host_resources):
+        resource_names = [x.Name for x in target_host_resources]
+        reporter.info_out("'{}' Target Hosts :\n{}".format(service_data.service_name,
+                                                           json.dumps(resource_names, indent=4)))
+
+    def _log_ansi_conf_with_masked_password(self, ansi_conf_json, reporter):
+        """
+        HIDE REPO PASSWORDS IN JSON OUTPUT
+        :param str ansi_conf_json:
+        :param SandboxReporter reporter:
+        :return:
+        """
         new_obj = json.loads(ansi_conf_json)
         curr_password = new_obj["repositoryDetails"]["password"]
         if curr_password:
@@ -460,21 +421,231 @@ class AnsibleSecondGenLogic(object):
         json_copy = json.dumps(new_obj, indent=4)
         reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
 
-        return ansi_conf_json
+    # TODO - Create flow for physical resources / apps / cached mgmt / user pb
+    def _populate_host_conf(self, host_conf, curr_resource_obj, service_data, cmd_input_params):
+        """
+        for apps and physical resources
+        general priority is resource level value with fallback to service level
+        :param HostConfigurationRequest2G host_conf:
+        :param ResourceInfo curr_resource_obj:
+        :param GenericAnsibleServiceData service_data:
+        :param str cmd_input_params:
+        :return:
+        """
+        # USER ATTR FROM LOGICAL RESOURCE
+        attrs = curr_resource_obj.ResourceAttributes
+        attrs_dict = {attr.Name: attr.Value for attr in attrs}
+
+        curr_resource_name = curr_resource_obj.Name
+        host_conf.ip = curr_resource_obj.Address
+        host_conf.resource_name = curr_resource_name
+        user_val = attrs_dict.get("User", "")
+        host_conf.username = user_val
+
+        # HOST PASSWORD + ACCESS KEY EXPECTED IN ENCRYPTED FORM IN REQUEST
+        encrypted_password_val = attrs_dict.get("Password", utility_globals.ENCRYPTED_EMPTY_STRING)
+        host_conf.password = encrypted_password_val
+
+        # ACCESS KEY - THIS ATTRIBUTE HAS TO BE CREATED ON LOGICAL RESOURCE - SHOULD BE ENCRYPTED PASSWORD ATTR
+        # TODO - how will access key / pem attr get populated for deployed apps on public cloud like AWS?
+        # Is there an api call maybe to get pem from DB?
+        encrypted_access_key_val = attrs_dict.get(override_attributes.ACCESS_KEY_ATTR,
+                                                  utility_globals.ENCRYPTED_EMPTY_STRING)
+        host_conf.accessKey = encrypted_access_key_val
+
+        # INVENTORY GROUPS
+        groups_str = attrs_dict.get(override_attributes.INVENTORY_GROUP_ATTR, "")
+        if groups_str:
+            inventory_groups_list = groups_str.strip().split(",")
+        else:
+            inventory_groups_list = None
+        host_conf.groups = inventory_groups_list
+
+        # CONNECTION METHOD
+        resource_attr_connection_method = attrs_dict.get(override_attributes.CONNECTION_METHOD_ATTR, "")
+
+        # connection method may be a lookup attribute with "NA" option which we want falsy
+        if resource_attr_connection_method.lower() in ["na", "n/a"]:
+            resource_attr_connection_method = ""
+
+        # host level value takes priority, fall back to service value
+        if resource_attr_connection_method:
+            host_conf.connectionMethod = resource_attr_connection_method
+        else:
+            host_conf.connectionMethod = service_data.connection_method
+
+        # CONNECTION SECURED
+        connection_secured_attr = attrs_dict.get(override_attributes.CONNECTION_SECURED_ATTR, "False")
+        is_connection_secured = True if connection_secured_attr.lower() == "true" else False
+        host_conf.connectionSecured = is_connection_secured
+
+        # SCRIPT PARAMS
+        script_params_resource_attr = attrs_dict.get(override_attributes.SCRIPT_PARAMS_ATTR, "")
+        self._populate_host_conf_params(host_conf, cmd_input_params, script_params_resource_attr, service_data)
+
+        return host_conf
+
+    def _populate_user_pb_host_conf(self, host_conf, curr_resource_obj, service_data, cached_config):
+        """
+        user pb - get details from cached params of app - reserved keywords
+        :param HostConfigurationRequest2G host_conf:
+        :param ResourceInfo curr_resource_obj:
+        :param GenericAnsibleServiceData service_data:
+        :param CachedAnsibleConfiguration cached_config:
+        :return:
+        """
+        # USER ATTR FROM LOGICAL RESOURCE
+        attrs = curr_resource_obj.ResourceAttributes
+        attrs_dict = {attr.Name: attr.Value for attr in attrs}
+
+        host_conf.ip = curr_resource_obj.Address
+        host_conf.resource_name = curr_resource_obj.Name
+        user_val = attrs_dict.get("User", "")
+        host_conf.username = user_val
+
+        # HOST PASSWORD + ACCESS KEY EXPECTED IN ENCRYPTED FORM IN REQUEST
+        encrypted_password_val = attrs_dict.get("Password", utility_globals.ENCRYPTED_EMPTY_STRING)
+        host_conf.password = encrypted_password_val
+
+        # the cached config will only have the one target host
+        host_conf.accessKey = cached_config.hosts_conf[0].access_key
+
+        # dig into the cached params dictionary for reserved keywords that define user playbooks
+        cached_params_dict = cached_config.hosts_conf[0].parameters
+
+        # INVENTORY GROUPS - app param first, fall back to resource attr
+        app_level_inventory_groups = cached_params_dict.get(user_pb_params.INVENTORY_GROUPS_PARAM)
+        resource_level_inventory_groups = attrs_dict.get(override_attributes.INVENTORY_GROUP_ATTR)
+        if app_level_inventory_groups:
+            inventory_groups_list = app_level_inventory_groups.strip().split(",")
+        elif resource_level_inventory_groups:
+            inventory_groups_list = resource_level_inventory_groups.strip().split(",")
+        else:
+            inventory_groups_list = None
+        host_conf.groups = inventory_groups_list
+
+        # CONNECTION METHOD
+        app_level_connection_method = cached_params_dict.get(user_pb_params.CONNECTION_METHOD_PARAM)
+        resource_attr_connection_method = attrs_dict.get(override_attributes.CONNECTION_METHOD_ATTR, "")
+
+        # connection method may be a lookup attribute with "NA" option which we want falsy
+        if resource_attr_connection_method.lower() in ["na", "n/a"]:
+            resource_attr_connection_method = ""
+
+        # app level takes priority, fall back resource attr, then to 2G service value
+        if app_level_connection_method:
+            host_conf.connectionMethod = app_level_connection_method
+        elif resource_attr_connection_method:
+            host_conf.connectionMethod = resource_attr_connection_method
+        else:
+            host_conf.connectionMethod = service_data.connection_method
+
+        # CONNECTION SECURED
+        app_level_connection_secured = cached_params_dict.get(user_pb_params.CONNECTION_SECURED_PARAM, "")
+        resource_attr_connection_secured = attrs_dict.get(override_attributes.CONNECTION_SECURED_ATTR, "")
+        if app_level_connection_secured:
+            host_conf.connectionSecured = True if app_level_connection_secured.lower() == "true" else False
+        else:
+            host_conf.connectionSecured = True if resource_attr_connection_secured.lower() == "true" else False
+
+        # SCRIPT PARAMS
+        host_conf.parameters = cached_config.hosts_conf[0].parameters
+
+        return host_conf
+
+
+    @staticmethod
+    def _populate_host_conf_params(host_conf, cmd_input_params, script_params_resource_attr, service_data):
+        """
+        priority list - NOT cumulative list, they override
+        1. service command input
+        2. resource attribute if populated
+        3. Fallback to service attribute value
+        :param str cmd_input_params:
+        :param HostConfigurationRequest2G host_conf:
+        :param str script_params_resource_attr:
+        :param GenericServiceData service_data:
+        :return:
+        """
+        if cmd_input_params:
+            host_conf.parameters = build_params_list(cmd_input_params)
+        elif script_params_resource_attr:
+            host_conf.parameters = build_params_list(script_params_resource_attr)
+        else:
+            host_conf.parameters = build_params_list(service_data.script_parameters)
+
+    @staticmethod
+    def _populate_top_level_ansi_conf(ansi_conf, repo_details, service_data):
+        """
+        populate all top level data outside of the hosts list
+        no return value - side effect helper to populate ansi_conf object
+        :param AnsibleConfigurationRequest2G ansi_conf:
+        :param PlaybookRepository repo_details:
+        :param GenericServiceData service_data:
+        :return:
+        """
+        # START POPULATING REQUEST OBJECT
+        ansi_conf.additionalArgs = service_data.additional_args if service_data.additional_args else None
+        ansi_conf.timeoutMinutes = int(service_data.timeout_minutes) if service_data.timeout_minutes else 0
+
+        # REPO DETAILS - REPO PASSWORD EXPECTED AS PLAIN TEXT DECRYPTED STRING
+        ansi_conf.repositoryDetails.url = repo_details.url
+        ansi_conf.repositoryDetails.username = repo_details.username
+        ansi_conf.repositoryDetails.password = repo_details.password
+
+    @staticmethod
+    def _populate_top_level_mgmt_ansi_conf(ansi_conf, repo_details, service_data, cached_config):
+        """
+        populate all top level data outside of the hosts list
+        no return value - side effect helper to populate ansi_conf object
+        :param AnsibleConfigurationRequest2G ansi_conf:
+        :param PlaybookRepoDecryptedPassword repo_details:
+        :param GenericServiceData service_data:
+        :param CachedAnsibleConfiguration cached_config:
+        :return:
+        """
+        # START POPULATING REQUEST OBJECT
+        ansi_conf.additionalArgs = cached_config.additional_cmd_args
+        ansi_conf.timeoutMinutes = cached_config.timeout_minutes
+
+        # REPO DETAILS - REPO PASSWORD EXPECTED AS PLAIN TEXT DECRYPTED STRING
+        ansi_conf.repositoryDetails.url = repo_details.url
+        ansi_conf.repositoryDetails.username = repo_details.username
+        ansi_conf.repositoryDetails.password = repo_details.decrypted_password
+
+    @staticmethod
+    def _populate_top_level_user_pb_ansi_conf(ansi_conf, repo_details, service_data, cached_config):
+        """
+        populate all top level data outside of the hosts list
+        no return value - side effect helper to populate ansi_conf object
+        :param AnsibleConfigurationRequest2G ansi_conf:
+        :param PlaybookRepoDecryptedPassword repo_details:
+        :param GenericServiceData service_data:
+        :param CachedAnsibleConfiguration cached_config:
+        :return:
+        """
+        # START POPULATING REQUEST OBJECT
+        ansi_conf.additionalArgs = cached_config.additional_cmd_args
+        ansi_conf.timeoutMinutes = cached_config.timeout_minutes
+
+        # REPO DETAILS
+        ansi_conf.repositoryDetails.url = repo_details.url
+        ansi_conf.repositoryDetails.username = repo_details.username
+        ansi_conf.repositoryDetails.password = repo_details.decrypted_password
 
     @staticmethod
     def _get_script_params_list(script_params, service_data):
         """
         user input takes priority over service attribute value
-        if both empty get empty list
+        if both empty fallback to empty list
         :param str script_params:
         :param GenericServiceData service_data:
         :return:
         """
         if script_params:
-            script_params_2g = _build_params_list(script_params)
+            script_params_2g = build_params_list(script_params)
         elif service_data.script_parameters:
-            script_params_2g = _build_params_list(service_data.script_parameters)
+            script_params_2g = build_params_list(service_data.script_parameters)
         else:
             script_params_2g = []
         return script_params_2g
@@ -488,7 +659,7 @@ class AnsibleSecondGenLogic(object):
         :param CloudShellAPISession api:
         :param SandboxReporter reporter:
         :param list[ResourceInfo] target_host_resources: resources to run playbook against
-        :param PlaybookRepoDetails repo_details:
+        :param PlaybookRepoDecryptedPassword repo_details:
         :param list[SandboxDataKeyValueInfo] sandbox_data:
         :param str script_params:
         :param bool is_global_playbook:
@@ -521,9 +692,9 @@ class AnsibleSecondGenLogic(object):
         # TAKE COMMAND INPUT AS PRIORITY, FALLBACK TO SERVICE ATTR VALUE
         # THIS WILL BE MERGED WITH CACHED VARS IN LOOP FOR EACH RESOURCE
         if script_params:
-            script_params_2g = _build_params_list(script_params)
+            script_params_2g = build_params_list(script_params)
         elif service_script_parameters:
-            script_params_2g = _build_params_list(service_script_parameters)
+            script_params_2g = build_params_list(service_script_parameters)
         else:
             script_params_2g = []
 
@@ -648,7 +819,7 @@ class AnsibleSecondGenLogic(object):
             script_params_attr = get_resource_attribute_gen_agostic(override_attributes.SCRIPT_PARAMS_ATTR, attrs)
             if script_params_attr:
                 if script_params_attr.Value:
-                    host_conf.parameters = _build_params_list(script_params_attr.Value)
+                    host_conf.parameters = build_params_list(script_params_attr.Value)
                 else:
                     host_conf.parameters = script_params_2g
             else:

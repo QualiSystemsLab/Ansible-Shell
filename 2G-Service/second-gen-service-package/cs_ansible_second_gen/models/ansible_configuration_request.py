@@ -28,10 +28,10 @@ class AnsibleConfigurationRequest2G(object):
 
 
 class PlaybookRepository(object):
-    def __init__(self):
-        self.url = None
-        self.username = None
-        self.password = None
+    def __init__(self, url=None, username=None, password=None):
+        self.url = url
+        self.username = username
+        self.password = password
 
 
 class HostConfigurationRequest2G(object):

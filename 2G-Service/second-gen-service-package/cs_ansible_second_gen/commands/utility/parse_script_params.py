@@ -48,12 +48,9 @@ def handle_json_list_params(input_str):
     return results
 
 
-def _build_params_list(input_str):
+def build_params_list(input_str):
     if not input_str:
         return []
-
-    # if input_str.startswith("{"):
-    #     raise ValueError('Invalid input. JSON must be a List of form [{"ansible_variable": "value"}, {"ansible_variable2": "value2"}]. Received: ' + input_str)
 
     if input_str.startswith(("[", "{")):
         return handle_json_list_params(input_str)
@@ -71,6 +68,6 @@ if __name__ == "__main__":
               '{"people_list": [{"name": "natti", "age": 33},{"name": "James", "age": 35}]}']
     for index, input in enumerate(inputs):
         print("=== test {} ===".format(index + 1))
-        my_params_list = _build_params_list(input)
+        my_params_list = build_params_list(input)
         pprint(my_params_list)
         pass

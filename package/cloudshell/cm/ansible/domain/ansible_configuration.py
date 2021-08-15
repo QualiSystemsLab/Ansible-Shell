@@ -122,19 +122,24 @@ class AnsibleConfigurationParser(object):
 
         return ansi_conf
 
+    # catching decrpyt errors to use plain text passwords coming from 2G service
     def _get_password(self, json_host):
         pw = json_host.get('password')
         if pw:
-            return self.api.DecryptPassword(pw).Value
-        else:
-            return pw
+            try:
+                return self.api.DecryptPassword(pw).Value
+            except Exception as e:
+                pass
+        return pw
 
     def _get_access_key(self, json_host):
         key = json_host.get('accessKey')
         if key:
-            return self.api.DecryptPassword(key).Value
-        else:
-            return key
+            try:
+                return self.api.DecryptPassword(key).Value
+            except Exception as e:
+                pass
+        return key
 
     @staticmethod
     def _validate(json_obj):

@@ -1,5 +1,4 @@
 import os
-
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
@@ -15,8 +14,7 @@ from cloudshell.cm.ansible.domain.filename_extractor import FilenameExtractor
 from cloudshell.cm.ansible.domain.host_vars_file import HostVarsFile
 from cloudshell.cm.ansible.domain.http_request_service import HttpRequestService
 from cloudshell.cm.ansible.domain.inventory_file import InventoryFile
-from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult, HostResult, FAILED_CONNECTIVITY_CHECK_MSG, \
-    DUPLICATE_IP_ISSUE_MSG
+from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult, HostResult
 from cloudshell.cm.ansible.domain.playbook_downloader import PlaybookDownloader
 from cloudshell.cm.ansible.domain.temp_folder_scope import TempFolderScope
 from cloudshell.cm.ansible.domain.zip_service import ZipService
@@ -154,7 +152,7 @@ class AnsibleShell(object):
                                                ansi_conf.hosts_conf,
                                                reporter)
 
-        # 2G service needs to read some config data stored on app and no api exists to read this currently
+        # 2G service needs to read config data stored on app and no api exists to read this currently
         if not ansi_conf.is_second_gen_service:
             cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter)
 
@@ -174,7 +172,9 @@ class AnsibleShell(object):
             playbook_name = self._download_playbook(ansi_conf, service_name, cancellation_sampler, logger,
                                                     reporter)
 
+            # workaround to allow openssl 1.0.1 on Linux ES by setting env variables
             crypto_allow_openssl()
+
             # check that at least one host from list is reachable
             self._wait_for_all_hosts_to_be_deployed(ansi_conf, service_name, api, logger, reporter)
 
@@ -229,15 +229,7 @@ class AnsibleShell(object):
         """
         with InventoryFile(self.file_system, self.INVENTORY_FILE_NAME, logger) as inventory:
             for host_conf in ansi_conf.hosts_conf:
-                if not host_conf.resource_name:
-                    logger.warn(
-                        "skipping adding host to inventory file for '{}' due to Duplicate IP / missing resource name".format(
-                            host_conf.ip))
-                    continue
-                if not host_conf.health_check_passed:
-                    logger.warn(
-                        "skipping adding host to inventory file for '{}' due to failed connectivity check".format(
-                            host_conf.resource_name))
+                if not self._is_host_valid(host_conf, logger, "Ansible Hosts List"):
                     continue
                 inventory.add_host_and_groups(host_conf.ip, host_conf.groups)
 
@@ -247,13 +239,7 @@ class AnsibleShell(object):
         :type logger: logging.Logger
         """
         for host_conf in ansi_conf.hosts_conf:
-            if not host_conf.resource_name:
-                logger.warn(
-                    "skipping host vars file for '{}' due to Duplicate IP / missing resource name".format(host_conf.ip))
-                continue
-            if not host_conf.health_check_passed:
-                logger.warn(
-                    "skipping host vars file for '{}' due to failed connectivity check".format(host_conf.resource_name))
+            if not self._is_host_valid(host_conf, logger, "Ansible Vars File"):
                 continue
 
             with HostVarsFile(self.file_system, host_conf.ip, logger) as file:
@@ -275,6 +261,28 @@ class AnsibleShell(object):
                         file_stream.write(host_conf.access_key)
                     file.add_conn_file(file_name)
 
+    @staticmethod
+    def _is_host_valid(host_conf, logger, file_type):
+        """
+        validate whether host should be added to hosts list and vars file for playbook execution
+        :param HostConfiguration host_conf:
+        :param logging.Logger logger:
+        :param str file_type: "Hosts List" / "Vars File" - for logging purposes
+        :return:
+        """
+        if not host_conf.resource_name:
+            logger.warn("skipping {} for '{}' - missing resource name".format(file_type, host_conf.ip))
+            return False
+        if not host_conf.health_check_passed:
+            logger.warn("skipping {} for '{}' - failed connectivity check".format(file_type,
+                                                                                  host_conf.resource_name))
+            return False
+        if not host_conf.password and not host_conf.access_key:
+            logger.warn("skipping {} for '{}' - missing Password / Access Key.".format(file_type,
+                                                                                       host_conf.resource_name))
+            return False
+        return True
+
     def _download_playbook(self, ansi_conf, service_name, cancellation_sampler, logger, reporter):
         """
         :type ansi_conf: AnsibleConfiguration
@@ -288,20 +296,21 @@ class AnsibleShell(object):
         # we need password field to be passed for gitlab auth tokens (which require token and not user)
         auth = HttpAuth(repo.username, repo.password) if repo.password else None
         reporter.info_out(
-            "Playbook DOWNLOADING from '{}' to ES '{}'..".format(repo.url_netloc,
+            "'{}' Playbook DOWNLOADING from '{}' to ES '{}'..".format(service_name, repo.url_netloc,
                                                                  self.execution_server_ip))
         start_time = default_timer()
         try:
             playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, auth, logger, cancellation_sampler)
         except Exception as e:
-            exc_msg = "Error downloading playbook from '{}' to ES '{}'. Exception: {}".format(
+            exc_msg = "Error downloading playbook from '{}' to ES '{}'. Exception {}: {}".format(
                 repo.url_netloc,
                 self.execution_server_ip,
+                type(e).__name__,
                 str(e))
             reporter.err_out(exc_msg)
             raise PlaybookDownloadException(exc_msg)
         download_seconds = default_timer() - start_time
-        completed_msg = "Playbook download finished after '{:.2f}' seconds".format(download_seconds)
+        completed_msg = "'{}' playbook download finished after '{:.2f}' seconds".format(service_name, download_seconds)
         reporter.info_out(completed_msg)
         return playbook_name
 
@@ -352,8 +361,13 @@ class AnsibleShell(object):
         reporter.info_out(wait_for_deploy_msg)
         for host in ansi_conf.hosts_conf:
             if not host.resource_name:
-                skip_message = "Skipping health check for '{}' due to duplicate IP issue".format(host.ip)
-                reporter.warn_out(skip_message)
+                err_msg = "Skipping health check for '{}' due to missing resource name".format(host.ip)
+                reporter.err_out(err_msg)  # can't set live status without resource name :/
+                continue
+
+            if not host.password and not host.access_key:
+                err_msg = "Missing credentials on '{}'. Skipping Health Check".format(host.resource_name)
+                self._error_log_and_status(api, host.resource_name, err_msg, reporter)
                 continue
 
             ansible_port = self.ansible_connection_helper.get_ansible_port(host)
@@ -375,15 +389,27 @@ class AnsibleShell(object):
                                                                                                   host.resource_name,
                                                                                                   type(e).__name__,
                                                                                                   str(e))
-                reporter.exc_out(err_msg)
-                api.SetResourceLiveStatus(resourceFullName=host.resource_name,
-                                          liveStatusName="Error",
-                                          additionalInfo=err_msg)
+                self._error_log_and_status(api, host.resource_name, err_msg, reporter)
             else:
                 # Set status of health check to passed. Will be added to ansible hosts list
                 host.health_check_passed = True
 
         reporter.info_out("Communication check completed to all hosts.")
+
+    @staticmethod
+    def _error_log_and_status(api, resource_name, err_msg, reporter):
+        """
+        utility function
+        :param CloudShellAPISession api:
+        :param str resource_name:
+        :param str err_msg:
+        :param SandboxReporter reporter:
+        :return:
+        """
+        reporter.err_out(err_msg)
+        api.SetResourceLiveStatus(resourceFullName=resource_name,
+                                  liveStatusName="Error",
+                                  additionalInfo=err_msg)
 
     @staticmethod
     def _set_live_status_for_playbook_hosts(host_results, service_name, run_time_seconds, api):
@@ -393,15 +419,11 @@ class AnsibleShell(object):
         :return:
         """
         for host in host_results:
-
             # set status for failed playbook results
             if not host.success:
-                if host.error:
+                if not host.health_check_passed:
                     # these errors already had their live status set in real time earlier
-                    if DUPLICATE_IP_ISSUE_MSG in host.error:
-                        continue
-                    if FAILED_CONNECTIVITY_CHECK_MSG in host.error:
-                        continue
+                    continue
 
                 live_status_msg = "FAILED playbook service '{}'. Error: {}".format(service_name, host.error)
                 api.SetResourceLiveStatus(resourceFullName=host.resource_name,
@@ -417,8 +439,6 @@ class AnsibleShell(object):
     @staticmethod
     def _populate_log_path_attr_value(target_log_attr, service_name, api, hosts_conf, reporter):
         """
-
-        :param self:
         :param str target_log_attr:
         :param str service_name:
         :param CloudShellAPISession api:

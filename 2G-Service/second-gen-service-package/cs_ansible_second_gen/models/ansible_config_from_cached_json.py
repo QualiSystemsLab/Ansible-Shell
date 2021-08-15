@@ -1,23 +1,24 @@
+from ansible_configuration import PlaybookRepository
 from cs_ansible_second_gen.service_globals import user_pb_params
 import json
 
 
 class CachedAnsibleConfiguration(object):
-    def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
+    def __init__(self, playbook_repo_decrypted_password=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
         """
-        :type playbook_repo: PlaybookRepoDetails
+        :type playbook_repo_decrypted_password: PlaybookRepoDecryptedPassword
         :type hosts_conf: list[HostConfiguration]
         :type additional_cmd_args: str
         :type timeout_minutes: float
         """
         self.timeout_minutes = timeout_minutes or 0.0
-        self.playbook_repo = playbook_repo or PlaybookRepoDetails()
+        self.playbook_repo = playbook_repo_decrypted_password or PlaybookRepoDecryptedPassword()
         self.hosts_conf = hosts_conf or []
         self.additional_cmd_args = additional_cmd_args
         self.is_second_gen_service = False
 
 
-class PlaybookRepoDetails(object):
+class PlaybookRepoDecryptedPassword(object):
     """ the cached sandbox data object has password already decrypted """
     def __init__(self, url=None, username=None, decrypted_password=None):
         self.url = url
@@ -39,7 +40,7 @@ class HostConfiguration(object):
 
 def get_cached_ansible_config_from_json(input_json):
     ansi_conf = CachedAnsibleConfiguration()
-    playbook_repo = PlaybookRepoDetails()
+    playbook_repo = PlaybookRepoDecryptedPassword()
 
     my_obj = json.loads(input_json)
 
@@ -73,6 +74,7 @@ def get_cached_ansible_config_from_json(input_json):
     return ansi_conf
 
 
+# USER PLAYBOOKS
 def get_cached_user_pb_repo_data(cached_ansible_conf):
     """
     stored as extra user parameters
@@ -81,10 +83,10 @@ def get_cached_user_pb_repo_data(cached_ansible_conf):
     """
     params_dict = cached_ansible_conf.hosts_conf[0].parameters
 
-    repo = PlaybookRepoDetails()
+    repo = PlaybookRepository()
     repo.url = params_dict.get(user_pb_params.REPO_URL_PARAM)
     repo.username = params_dict.get(user_pb_params.REPO_USERNAME_PARAM)
-    repo.decrypted_password = params_dict.get(user_pb_params.REPO_PASSWORD_PARAM)
+    repo.password = params_dict.get(user_pb_params.REPO_PASSWORD_PARAM)
     return repo
 
 
@@ -98,6 +100,7 @@ def get_cached_user_pb_inventory_groups_str(cached_ansible_conf):
     return params_dict.get(user_pb_params.INVENTORY_GROUPS_PARAM)
 
 
+# MGMT PLAYBOOKS
 def get_cached_mgmt_pb_inventory_groups_list(cached_ansible_conf):
     """
     stored as extra user parameters

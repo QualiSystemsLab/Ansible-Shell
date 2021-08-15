@@ -44,14 +44,15 @@ class AnsibleSecondGenCommands(object):
             target_host_resources = self._logic.get_all_canvas_resources(api, res_id)
 
         # PACK UP REPO DETAILS
-        repo_details = self._logic.get_repo_details(api, playbook_path, reporter, service_data,
+        repo_details = self._logic.get_repo_details(playbook_path, reporter, service_data,
                                                     self._supported_protocols)
 
         # BUILD REQUEST JSON
         try:
-            ansible_config_json = self._logic.get_ansible_config_json(service_data, api, reporter,
+            ansible_config_json = self._logic.get_ansible_config_json(service_data,
                                                                       target_host_resources,
                                                                       repo_details,
+                                                                      reporter,
                                                                       script_params)
         except Exception as e:
             custom_msg = "Issue building ansible JSON request"
@@ -99,7 +100,7 @@ class AnsibleSecondGenCommands(object):
         service_name = context.resource.name
 
         # PACK UP REPO DETAILS
-        repo_details = self._logic.get_repo_details(api, playbook_path, reporter, service_data,
+        repo_details = self._logic.get_repo_details(playbook_path, reporter, service_data,
                                                     self._supported_protocols)
 
         target_host_resources = self._logic.get_infrastructure_resources(infrastructure_resources, service_name, api,
@@ -107,42 +108,38 @@ class AnsibleSecondGenCommands(object):
 
         reporter.info_out("'{}' Executing Ansible INFRA Playbook...".format(context.resource.name))
 
-        # TODO - remove this and break up json building logic
-        sandbox_data = api.GetSandboxData(res_id).SandboxDataKeyValues
-
         try:
-            ansible_config_json = self._logic.get_ansible_config_json(service_data, api, reporter,
+            ansible_config_json = self._logic.get_ansible_config_json(service_data,
                                                                       target_host_resources,
                                                                       repo_details,
-                                                                      sandbox_data,
+                                                                      reporter,
                                                                       script_params)
         except Exception as e:
-            exc_msg = "Error building playbook request on '{}': {}".format(service_name, str(e))
-            reporter.exc_out(exc_msg)
-            api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
-                                     additionalInfo=str(e))
-            raise Exception(exc_msg)
+            custom_msg = "Issue building ansible JSON request"
+            exc_msg = self._build_exc_msg(service_name, custom_msg, e)
+            self._log_and_status(exc_msg, reporter, api, res_id, service_name)
+            raise AnsibleSecondGenServiceException(exc_msg)
 
+        reporter.info_out("Running Ansible service '{}'...".format(context.resource.name))
         try:
-            self._first_gen_ansible_shell.execute_playbook(context, ansible_config_json, cancellation_context)
+            result_msg = self._first_gen_ansible_shell.execute_playbook(context, ansible_config_json,
+                                                                        cancellation_context)
         except Exception as e:
-            exc_msg = "Error running playbook on '{}': {}".format(service_name, str(e))
-            reporter.err_out(exc_msg)
-            api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
-                                     additionalInfo=str(e))
-            if len(target_host_resources) == 1:
-                resource_name = target_host_resources[0].Name
-                api.SetResourceLiveStatus(resourceFullName=resource_name, liveStatusName="Error",
-                                          additionalInfo=str(e))
-            raise Exception(exc_msg)
+            custom_msg = "Issue executing playbook driver"
+            exc_msg = self._build_exc_msg(service_name, custom_msg, e)
+            self._log_and_status(exc_msg, reporter, api, res_id, service_name)
+            raise AnsibleSecondGenServiceException(exc_msg)
+
+        if "failed" in result_msg:
+            custom_msg = "Failed playbook result"
+            exc_msg = self._build_exc_msg(service_name, custom_msg)
+            self._log_and_status(exc_msg, reporter, api, res_id, service_name)
+            raise AnsibleSecondGenServiceException(exc_msg)
 
         api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Online",
                                  additionalInfo="Playbook Flow Completed")
-        if len(target_host_resources) == 1:
-            resource_name = target_host_resources[0].Name
-            api.SetResourceLiveStatus(resourceFullName=resource_name, liveStatusName="Online",
-                                      additionalInfo="Playbook Flow Completed")
-        completed_msg = "Ansible INFRA Flow Completed for '{}'.".format(service_name)
+
+        completed_msg = "Ansible Infrastructure Service Flow Completed for '{}'.".format(service_name)
         reporter.warn_out(completed_msg, log_only=True)
         return completed_msg
 
@@ -169,55 +166,48 @@ class AnsibleSecondGenCommands(object):
         if not target_host_resources:
             exc_msg = "{} can't run USER playbook. No target host".format(service_name)
             reporter.err_out(exc_msg)
-            raise Exception(exc_msg)
+            raise AnsibleSecondGenServiceException(exc_msg)
 
         if len(target_host_resources) > 1:
             target_host_names = [x.Name for x in target_host_resources]
             json_outp = json.dumps(target_host_names, indent=4)
             exc_msg = "Can't run USER playbook against multiple hosts. Current targets:\n{}".format(json_outp)
             reporter.err_out(exc_msg)
-            raise Exception(exc_msg)
+            raise AnsibleSecondGenServiceException(exc_msg)
 
-        target_resource_name = target_host_resources[0].Name
-        cached_config = self._logic.get_cached_ansi_conf_from_resource_name(target_resource_name, sandbox_data)
+        target_resource = target_host_resources[0]
+        cached_config = self._logic.get_cached_ansi_conf_from_resource_name(target_resource.Name, sandbox_data)
 
         if not cached_config:
-            stop_msg = "No cached USER playbook for '{}'. Stopping command.".format(target_resource_name)
-            reporter.warn_out(stop_msg, log_only=True)
-            return stop_msg
+            err_msg = "No cached USER playbook for '{}'. Stopping command.".format(target_resource.Name)
+            reporter.err_out(err_msg)
+            raise AnsibleSecondGenServiceException(err_msg)
 
         repo_details = get_cached_user_pb_repo_data(cached_config)
 
         reporter.info_out("'{}' is Executing USER Ansible Playbook...".format(context.resource.name))
         try:
-            ansible_config_json = self._logic.get_ansible_config_json(service_data, api, reporter,
-                                                                      target_host_resources,
-                                                                      repo_details,
-                                                                      sandbox_data)
+            ansible_config_json = self._logic.get_cached_ansible_user_pb_config_json(service_data,
+                                                                                     target_resource,
+                                                                                     repo_details,
+                                                                                     cached_config,
+                                                                                     reporter)
         except Exception as e:
-            exc_msg = "Error building playbook request on '{}': {}".format(service_name, str(e))
-            reporter.exc_out(exc_msg)
-            api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
-                                     additionalInfo=str(e))
-            raise Exception(exc_msg)
+            custom_msg = "Issue building ansible JSON request"
+            exc_msg = self._build_exc_msg(service_name, custom_msg, e)
+            self._log_and_status(exc_msg, reporter, api, res_id, service_name)
+            raise AnsibleSecondGenServiceException(exc_msg)
 
         try:
             self._first_gen_ansible_shell.execute_playbook(context, ansible_config_json, cancellation_context)
         except Exception as e:
-            exc_msg = "Error running playbook on '{}': {}".format(service_name, str(e))
-            reporter.err_out(exc_msg)
-            api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
-                                     additionalInfo=str(e))
-            api.SetResourceLiveStatus(resourceFullName=target_resource_name, liveStatusName="Error",
-                                      additionalInfo=str(e))
-            raise Exception(exc_msg)
+            custom_msg = "Issue executing playbook driver"
+            exc_msg = self._build_exc_msg(service_name, custom_msg, e)
+            self._log_and_status(exc_msg, reporter, api, res_id, service_name)
+            raise AnsibleSecondGenServiceException(exc_msg)
 
         api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Online",
                                  additionalInfo="USER Playbook Flow Completed")
-        if len(target_host_resources) == 1:
-            resource_name = target_host_resources[0].Name
-            api.SetResourceLiveStatus(resourceFullName=resource_name, liveStatusName="Online",
-                                      additionalInfo="Playbook Flow Completed")
         completed_msg = "'{}' USER playbook flow completed.".format(service_name)
         reporter.warn_out(completed_msg, log_only=True)
         return completed_msg
@@ -258,6 +248,7 @@ class AnsibleSecondGenCommands(object):
             reporter.warn_out(stop_msg, log_only=True)
             return stop_msg
 
+        # TODO - change this!
         repo_details = get_cached_user_pb_repo_data(cached_config)
 
         reporter.info_out("'{}' is Executing MGMT Ansible Playbook...".format(context.resource.name))

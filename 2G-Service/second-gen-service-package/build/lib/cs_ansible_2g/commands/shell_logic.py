@@ -1,14 +1,14 @@
 import json
 from cloudshell.core.logger.qs_logger import get_qs_logger
 from cs_ansible_second_gen.commands.utility.gitlab_api_url_validator import is_base_path_gitlab_api
-from cs_ansible_second_gen.commands.utility.parse_script_params import _build_params_list
+from cs_ansible_second_gen.commands.utility.parse_script_params import build_params_list
 from cs_ansible_second_gen.commands.utility.resource_helpers import get_resource_attribute_gen_agostic
 from cs_ansible_second_gen.commands.utility.sandbox_reporter import SandboxReporter
 from cs_ansible_second_gen.commands.utility.shell_connector_helpers import get_connector_endpoints
 from cs_ansible_second_gen.commands.utility.validate_protocols import is_path_supported_protocol
 from cs_ansible_second_gen.exceptions.exceptions import AnsibleSecondGenServiceException
 from cs_ansible_second_gen.models.ansible_config_from_cached_json import get_cached_ansible_config_from_json, \
-    get_cached_mgmt_pb_inventory_groups_list, get_cached_user_pb_inventory_groups_str, PlaybookRepoDetails
+    get_cached_mgmt_pb_inventory_groups_list, get_cached_user_pb_inventory_groups_str, PlaybookRepoDecryptedPassword
 from cs_ansible_second_gen.models.ansible_configuration_request import AnsibleConfigurationRequest2G, \
     GenericAnsibleServiceData, HostConfigurationRequest2G
 from cs_ansible_second_gen.service_globals import user_pb_params, override_attributes
@@ -279,7 +279,7 @@ class AnsibleSecondGenLogic(object):
                                        supported_protocols=supported_protocols,
                                        reporter=reporter,
                                        gitlab_branch=service_data.gitlab_branch)
-        repo_details = PlaybookRepoDetails(repo_url, repo_user, repo_password)
+        repo_details = PlaybookRepoDecryptedPassword(repo_url, repo_user, repo_password)
         return repo_details
 
     @staticmethod
@@ -337,7 +337,7 @@ class AnsibleSecondGenLogic(object):
         :param CloudShellAPISession api:
         :param SandboxReporter reporter:
         :param list[ResourceInfo] target_host_resources: resources to run playbook against
-        :param PlaybookRepoDetails repo_details:
+        :param PlaybookRepoDecryptedPassword repo_details:
         :param list[SandboxDataKeyValueInfo] sandbox_data:
         :param str script_params:
         :param bool is_global_playbook:
@@ -370,9 +370,9 @@ class AnsibleSecondGenLogic(object):
         # TAKE COMMAND INPUT AS PRIORITY, FALLBACK TO SERVICE ATTR VALUE
         # THIS WILL BE MERGED WITH CACHED VARS IN LOOP FOR EACH RESOURCE
         if script_params:
-            script_params_2g = _build_params_list(script_params)
+            script_params_2g = build_params_list(script_params)
         elif service_script_parameters:
-            script_params_2g = _build_params_list(service_script_parameters)
+            script_params_2g = build_params_list(service_script_parameters)
         else:
             script_params_2g = []
 
@@ -497,7 +497,7 @@ class AnsibleSecondGenLogic(object):
             script_params_attr = get_resource_attribute_gen_agostic(override_attributes.SCRIPT_PARAMS_ATTR, attrs)
             if script_params_attr:
                 if script_params_attr.Value:
-                    host_conf.parameters = _build_params_list(script_params_attr.Value)
+                    host_conf.parameters = build_params_list(script_params_attr.Value)
                 else:
                     host_conf.parameters = script_params_2g
             else:

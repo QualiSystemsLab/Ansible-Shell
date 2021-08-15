@@ -1,6 +1,5 @@
 from cloudshell.api.cloudshell_api import CloudShellAPISession, SandboxDataKeyValue, ReservedResourceInfo, ReservedTopologyGlobalInputsInfo
 from ansible_configuration import AnsibleConfiguration
-from cloudshell.shell.core.driver_context import ResourceCommandContext
 import copy
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
 from cloudshell.cm.ansible.domain.driver_globals import ANSIBLE_MGMT_FAILED_PREFIX
@@ -82,7 +81,7 @@ def cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter):
         # resource name is populated on object earlier in custom flow by lookup action. If not found it will be None.
         if not resource_name:
             err_msg = "No resource name found for IP: {}. Skipping sandbox data save for this host".format(curr_ansi_conf_ip)
-            reporter.err_out(err_msg, log_only=True)
+            reporter.warn_out(err_msg)
             continue
 
         # skip cacheing step for existing keys when rerunning setup
@@ -109,9 +108,9 @@ def cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter):
             api.SetSandboxData(res_id, sb_data)
         except Exception as e:
             err_msg = "Issue setting sandbox data for resource '{}'".format(resource_name)
-            reporter.err_out(err_msg, log_only=True)
-            raise Exception(err_msg)
-        reporter.info_out("set ansible sandbox data key: {}".format(sb_data_key), log_only=True)
+            reporter.err_out(err_msg)
+            # raise Exception(err_msg)
+        reporter.info_out("Ansible sandbox data key set: '{}'".format(sb_data_key), log_only=True)
 
 
 def merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs):
