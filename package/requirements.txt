@@ -3,5 +3,4 @@ cloudshell-shell-core>=3.1.0,<3.2.0
 paramiko==2.7.2
 pywinrm==0.2.2
 requests==2.14.2
-# paramiko==2.1.2
 pyaml>=20.0,<21.0

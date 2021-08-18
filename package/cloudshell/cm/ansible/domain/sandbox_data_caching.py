@@ -74,6 +74,8 @@ def cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter):
     :rtype AnsibleConfiguration
     """
     sandbox_data = api.GetSandboxData(res_id).SandboxDataKeyValues
+    # TODO - optimize with dict lookup
+    # sandbox_data_dict = {item.Key : item.Value for item in sandbox_data}
     for curr_host in ansi_conf.hosts_conf:
         curr_ansi_conf_ip = curr_host.ip
         resource_name = curr_host.resource_name

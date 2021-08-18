@@ -103,6 +103,7 @@ class AnsibleConfigurationParser(object):
         for host_index, json_host in enumerate(json_obj.get('hostsDetails', [])):
             host_conf = HostConfiguration()
             host_conf.ip = json_host.get('ip')
+            host_conf.resource_name = json_host.get('resourceName')
             host_conf.connection_method = json_host.get('connectionMethod').lower()
             host_conf.connection_secured = bool_parse(json_host.get('connectionSecured'))
             host_conf.username = json_host.get('username')

@@ -3,7 +3,7 @@ from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import Ansib
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
 from cloudshell.cm.ansible.domain.connection_service import ConnectionService
-from cloudshell.cm.ansible.domain.exceptions import AnsibleDriverException, PlaybookDownloadException, \
+from cloudshell.cm.ansible.domain.exceptions import PlaybookDownloadException, \
     AnsibleFailedConnectivityException
 from cloudshell.cm.ansible.domain.ansible_command_executor import AnsibleCommandExecutor, ReservationOutputWriter
 from cloudshell.cm.ansible.domain.ansible_config_file import AnsibleConfigFile, get_user_ansible_cfg_config_keys
@@ -145,6 +145,7 @@ class AnsibleShell(object):
                                                api,
                                                ansi_conf.hosts_conf,
                                                reporter)
+
         else:
             self._populate_log_path_attr_value(consts.USER_ANSIBLE_LOG_ATTR,
                                                service_name,
@@ -454,10 +455,11 @@ class AnsibleShell(object):
                                       attributeName=target_log_attr,
                                       attributeValue=service_name)
             except Exception as e:
-                reporter.err_out("Error setting '{}' attribute for resource '{}'. {}: {}".format(target_log_attr,
+                err_msg = "Error setting '{}' attribute for resource '{}'. {}: {}".format(target_log_attr,
                                                                                                  curr_host.resource_name,
                                                                                                  type(e).__name__,
-                                                                                                 str(e)))
+                                                                                                 str(e))
+                reporter.err_out(err_msg, log_only=True)
             else:
                 reporter.info_out("Log path attributes set successfully", log_only=True)
 
