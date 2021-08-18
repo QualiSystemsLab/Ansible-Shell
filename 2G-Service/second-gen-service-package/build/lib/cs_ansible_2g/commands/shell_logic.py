@@ -8,7 +8,7 @@ from cs_ansible_second_gen.commands.utility.shell_connector_helpers import get_c
 from cs_ansible_second_gen.commands.utility.validate_protocols import is_path_supported_protocol
 from cs_ansible_second_gen.exceptions.exceptions import AnsibleSecondGenServiceException
 from cs_ansible_second_gen.models.ansible_config_from_cached_json import get_cached_ansible_config_from_json, \
-    get_cached_mgmt_pb_inventory_groups_list, get_cached_user_pb_inventory_groups_str, PlaybookRepoDecryptedPassword
+    get_cached_mgmt_pb_inventory_groups_list, get_cached_user_pb_inventory_groups_str, CachedPlaybookRepoDecryptedPassword
 from cs_ansible_second_gen.models.ansible_configuration_request import AnsibleConfigurationRequest2G, \
     GenericAnsibleServiceData, HostConfigurationRequest2G
 from cs_ansible_second_gen.service_globals import user_pb_params, override_attributes
@@ -279,7 +279,7 @@ class AnsibleSecondGenLogic(object):
                                        supported_protocols=supported_protocols,
                                        reporter=reporter,
                                        gitlab_branch=service_data.gitlab_branch)
-        repo_details = PlaybookRepoDecryptedPassword(repo_url, repo_user, repo_password)
+        repo_details = CachedPlaybookRepoDecryptedPassword(repo_url, repo_user, repo_password)
         return repo_details
 
     @staticmethod
@@ -337,7 +337,7 @@ class AnsibleSecondGenLogic(object):
         :param CloudShellAPISession api:
         :param SandboxReporter reporter:
         :param list[ResourceInfo] target_host_resources: resources to run playbook against
-        :param PlaybookRepoDecryptedPassword repo_details:
+        :param CachedPlaybookRepoDecryptedPassword repo_details:
         :param list[SandboxDataKeyValueInfo] sandbox_data:
         :param str script_params:
         :param bool is_global_playbook:

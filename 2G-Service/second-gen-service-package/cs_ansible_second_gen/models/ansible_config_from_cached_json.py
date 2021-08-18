@@ -1,4 +1,4 @@
-from ansible_configuration import PlaybookRepository
+from cloudshell.cm.ansible.domain.ansible_configuration import PlaybookRepository
 from cs_ansible_second_gen.service_globals import user_pb_params
 import json
 
@@ -6,19 +6,19 @@ import json
 class CachedAnsibleConfiguration(object):
     def __init__(self, playbook_repo_decrypted_password=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
         """
-        :type playbook_repo_decrypted_password: PlaybookRepoDecryptedPassword
-        :type hosts_conf: list[HostConfiguration]
+        :type playbook_repo_decrypted_password: CachedPlaybookRepoDecryptedPassword
+        :type hosts_conf: list[CachedHostConfiguration]
         :type additional_cmd_args: str
         :type timeout_minutes: float
         """
         self.timeout_minutes = timeout_minutes or 0.0
-        self.playbook_repo = playbook_repo_decrypted_password or PlaybookRepoDecryptedPassword()
+        self.playbook_repo = playbook_repo_decrypted_password or CachedPlaybookRepoDecryptedPassword()
         self.hosts_conf = hosts_conf or []
         self.additional_cmd_args = additional_cmd_args
-        self.is_second_gen_service = False
+        self.is_second_gen_service = True
 
 
-class PlaybookRepoDecryptedPassword(object):
+class CachedPlaybookRepoDecryptedPassword(object):
     """ the cached sandbox data object has password already decrypted """
     def __init__(self, url=None, username=None, decrypted_password=None):
         self.url = url
@@ -26,7 +26,7 @@ class PlaybookRepoDecryptedPassword(object):
         self.decrypted_password = decrypted_password
 
 
-class HostConfiguration(object):
+class CachedHostConfiguration(object):
     def __init__(self):
         self.ip = None
         self.connection_method = None
@@ -36,11 +36,12 @@ class HostConfiguration(object):
         self.access_key = None
         self.groups = []
         self.parameters = {}
+        self.resource_name = None
 
 
 def get_cached_ansible_config_from_json(input_json):
     ansi_conf = CachedAnsibleConfiguration()
-    playbook_repo = PlaybookRepoDecryptedPassword()
+    playbook_repo = CachedPlaybookRepoDecryptedPassword()
 
     my_obj = json.loads(input_json)
 
@@ -61,10 +62,11 @@ def get_cached_ansible_config_from_json(input_json):
         raise Exception("hosts data list greater than 1:\n{}".format(json.dumps(my_obj_hosts, indent=4)))
 
     host_obj = my_obj_hosts[0]
-    host_conf = HostConfiguration()
+    host_conf = CachedHostConfiguration()
     host_conf.username = host_obj["username"]
     host_conf.password = host_obj["password"]
     host_conf.ip = host_obj["ip"]
+    host_conf.resource_name = host_obj["resource_name"]
     host_conf.parameters = host_obj["parameters"]
     host_conf.groups = host_obj["groups"]
     host_conf.access_key = host_obj["access_key"]

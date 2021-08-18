@@ -46,7 +46,7 @@ class HostConfigurationRequest2G(object):
         self.accessKey = None
         self.groups = None
         self.parameters = None
-        self.resource_name = None
+        self.resourceName = None
 
 
 class GenericAnsibleServiceData(object):

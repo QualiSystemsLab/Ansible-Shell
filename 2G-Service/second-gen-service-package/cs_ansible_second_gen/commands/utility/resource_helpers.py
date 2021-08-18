@@ -14,3 +14,20 @@ def get_resource_attribute_gen_agostic(attribute_key, resource_attributes):
         if any(match_conditions):
             return attr
     return None
+
+
+def get_normalized_attrs_dict(attrs_dict_list):
+    """
+    strip namespace from attr and build dictionary
+    :param list[ResourceAttribute] attrs_dict_list:
+    :return:
+    """
+    result = {}
+    for curr_attr in attrs_dict_list:
+        key_split = curr_attr.Name.split(".")
+        if len(key_split) > 1:
+            key = key_split[1]
+        else:
+            key = curr_attr.Name
+        result[key] = curr_attr.Value
+    return result

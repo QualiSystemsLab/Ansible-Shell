@@ -30,4 +30,5 @@ cs_ansible_second_gen/models/ansible_configuration_request.py
 cs_ansible_second_gen/service_globals/__init__.py
 cs_ansible_second_gen/service_globals/override_attributes.py
 cs_ansible_second_gen/service_globals/user_pb_params.py
+cs_ansible_second_gen/service_globals/utility_globals.py
 tests/__init__.py

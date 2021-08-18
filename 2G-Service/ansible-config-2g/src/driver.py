@@ -31,6 +31,10 @@ class AnsibleConfig2GDriver(ResourceDriverInterface):
         :return:
         """
         service_data = self._get_service_data_from_resource(context)
+        # Get Resources from Connections
+        # Get Resources from "Ansible Selector" Attribute
+        # Merge Resources List
+        # Execute on Resources list
         return self._commands.execute_playbook(service_data, context, cancellation_context, playbook_path,
                                                script_params)
 

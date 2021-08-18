@@ -2,18 +2,17 @@ import json
 from cloudshell.core.logger.qs_logger import get_qs_logger
 from cs_ansible_second_gen.commands.utility.gitlab_api_url_validator import is_base_path_gitlab_api
 from cs_ansible_second_gen.commands.utility.parse_script_params import build_params_list
-from cs_ansible_second_gen.commands.utility.resource_helpers import get_resource_attribute_gen_agostic
 from cs_ansible_second_gen.commands.utility.sandbox_reporter import SandboxReporter
 from cs_ansible_second_gen.commands.utility.shell_connector_helpers import get_connector_endpoints
 from cs_ansible_second_gen.commands.utility.validate_protocols import is_path_supported_protocol
 from cs_ansible_second_gen.exceptions.exceptions import AnsibleSecondGenServiceException
 from cs_ansible_second_gen.models.ansible_config_from_cached_json import get_cached_ansible_config_from_json, \
-    get_cached_mgmt_pb_inventory_groups_list, get_cached_user_pb_inventory_groups_str, PlaybookRepoDecryptedPassword, \
-    CachedAnsibleConfiguration
+    CachedPlaybookRepoDecryptedPassword, CachedAnsibleConfiguration
 from cs_ansible_second_gen.models.ansible_configuration_request import AnsibleConfigurationRequest2G, \
     GenericAnsibleServiceData, HostConfigurationRequest2G, PlaybookRepository
 from cs_ansible_second_gen.service_globals import user_pb_params, override_attributes, utility_globals
-from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
+from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo, ResourceAttribute
+from cs_ansible_second_gen.commands.utility.resource_helpers import get_normalized_attrs_dict
 
 
 class AnsibleSecondGenLogic(object):
@@ -23,12 +22,12 @@ class AnsibleSecondGenLogic(object):
     def get_linked_resources(self, api, service_name, res_id, connectors, config_selector, reporter):
         """
         find resources connected by connector or linked by matching selector attribute and combine
-        :param api:
-        :param service_name:
-        :param res_id:
+        :param CloudShellAPISession api:
+        :param str service_name:
+        :param str res_id:
         :param connectors:
-        :param config_selector:
-        :param reporter:
+        :param str config_selector:
+        :param SandboxReporter reporter:
         :return:
         """
         connector_resources = self._get_resources_from_connectors(api, service_name, connectors, reporter)
@@ -260,7 +259,6 @@ class AnsibleSecondGenLogic(object):
 
     def get_repo_details(self, playbook_path, reporter, service_data, supported_protocols):
         """
-        :param api:
         :param playbook_path:
         :param reporter:
         :param service_data:
@@ -326,7 +324,7 @@ class AnsibleSecondGenLogic(object):
                     selector_linked_resources.append(resource.Name)
         return selector_linked_resources
 
-    def get_ansible_config_json(self, service_data, target_host_resources,  repo_details, reporter,
+    def get_ansible_config_json(self, service_data, target_host_resources, repo_details, reporter,
                                 cmd_input_params=""):
         """
         Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
@@ -361,7 +359,7 @@ class AnsibleSecondGenLogic(object):
         Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
         :param GenericAnsibleServiceData service_data:
         :param ResourceInfo target_resource:
-        :param PlaybookRepoDecryptedPassword repo_details:
+        :param CachedPlaybookRepoDecryptedPassword repo_details:
         :param CachedAnsibleConfiguration cached_config:
         :param SandboxReporter reporter:
         :return:
@@ -372,19 +370,22 @@ class AnsibleSecondGenLogic(object):
 
         # START BUILDING REQUEST FOR SINGLE HOST
         host_conf = HostConfigurationRequest2G()
-        host_conf = self._populate_host_conf(host_conf, target_resource, service_data)
+
+        # TODO - fix this shite
+        host_conf = self._populate_mgmt_pb_host_conf(host_conf, target_resource, service_data, cached_config)
         ansi_conf.hostsDetails.append(host_conf)
 
         ansi_conf_json = ansi_conf.get_pretty_json()
         self._log_ansi_conf_with_masked_password(ansi_conf_json, reporter)
         return ansi_conf_json
 
-    def get_cached_ansible_user_pb_config_json(self, service_data, target_resource, repo_details, cached_config, reporter):
+    def get_cached_ansible_user_pb_config_json(self, service_data, target_resource, repo_details, cached_config,
+                                               reporter):
         """
         Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
         :param GenericAnsibleServiceData service_data:
         :param ResourceInfo target_resource:
-        :param PlaybookRepoDecryptedPassword repo_details:
+        :param CachedPlaybookRepoDecryptedPassword repo_details:
         :param CachedAnsibleConfiguration cached_config:
         :param SandboxReporter reporter:
         :return:
@@ -434,11 +435,15 @@ class AnsibleSecondGenLogic(object):
         """
         # USER ATTR FROM LOGICAL RESOURCE
         attrs = curr_resource_obj.ResourceAttributes
-        attrs_dict = {attr.Name: attr.Value for attr in attrs}
+
+        # attrs_dict = {attr.Name: attr.Value for attr in attrs}
+        attrs_dict = get_normalized_attrs_dict(attrs)
 
         curr_resource_name = curr_resource_obj.Name
+
         host_conf.ip = curr_resource_obj.Address
-        host_conf.resource_name = curr_resource_name
+        host_conf.resourceName = curr_resource_name
+
         user_val = attrs_dict.get("User", "")
         host_conf.username = user_val
 
@@ -485,7 +490,8 @@ class AnsibleSecondGenLogic(object):
 
         return host_conf
 
-    def _populate_user_pb_host_conf(self, host_conf, curr_resource_obj, service_data, cached_config):
+    @staticmethod
+    def _populate_user_pb_host_conf(host_conf, curr_resource_obj, service_data, cached_config):
         """
         user pb - get details from cached params of app - reserved keywords
         :param HostConfigurationRequest2G host_conf:
@@ -497,9 +503,10 @@ class AnsibleSecondGenLogic(object):
         # USER ATTR FROM LOGICAL RESOURCE
         attrs = curr_resource_obj.ResourceAttributes
         attrs_dict = {attr.Name: attr.Value for attr in attrs}
+        attrs_dict = get_normalized_attrs_dict(attrs)
 
         host_conf.ip = curr_resource_obj.Address
-        host_conf.resource_name = curr_resource_obj.Name
+        host_conf.resourceName = curr_resource_obj.Name
         user_val = attrs_dict.get("User", "")
         host_conf.username = user_val
 
@@ -553,6 +560,57 @@ class AnsibleSecondGenLogic(object):
 
         return host_conf
 
+    @staticmethod
+    def _populate_mgmt_pb_host_conf(host_conf, curr_resource_obj, service_data, cached_config):
+        """
+        rerun the mgmt playbook
+        :param HostConfigurationRequest2G host_conf:
+        :param ResourceInfo curr_resource_obj:
+        :param GenericAnsibleServiceData service_data:
+        :param CachedAnsibleConfiguration cached_config:
+        :return:
+        """
+        # ==== RESOURCE ATTRIBUTES ====
+        # USER ATTR FROM LOGICAL RESOURCE
+        attrs = curr_resource_obj.ResourceAttributes
+        attrs_dict = {attr.Name: attr.Value for attr in attrs}
+        attrs_dict = get_normalized_attrs_dict(attrs)
+
+
+        host_conf.ip = curr_resource_obj.Address
+        host_conf.resourceName = curr_resource_obj.Name
+        user_val = attrs_dict.get("User", "")
+        host_conf.username = user_val
+
+        # HOST PASSWORD + ACCESS KEY EXPECTED IN ENCRYPTED FORM
+        encrypted_password_val = attrs_dict.get("Password", utility_globals.ENCRYPTED_EMPTY_STRING)
+        host_conf.password = encrypted_password_val
+
+        # the cached config will only have the one target host
+        host_conf.accessKey = cached_config.hosts_conf[0].access_key
+
+        # dig into the cached params dictionary for reserved keywords that define user playbooks
+        cached_params_dict = cached_config.hosts_conf[0].parameters
+
+        # INVENTORY GROUPS - cached management value on host
+        inventory_groups_list = cached_config.hosts_conf[0].groups.strip().split(",")
+        host_conf.groups = inventory_groups_list
+
+        # CONNECTION METHOD
+        host_conf.connectionMethod = cached_config.hosts_conf[0].connection_method
+
+        # CONNECTION SECURED - NOT actually exposed in config UI - default to False and set true if attribute or param exist
+        app_level_connection_secured = cached_params_dict.get(user_pb_params.CONNECTION_SECURED_PARAM, "")
+        resource_attr_connection_secured = attrs_dict.get(override_attributes.CONNECTION_SECURED_ATTR, "")
+        if app_level_connection_secured:
+            host_conf.connectionSecured = True if app_level_connection_secured.lower() == "true" else False
+        else:
+            host_conf.connectionSecured = True if resource_attr_connection_secured.lower() == "true" else False
+
+        # SCRIPT PARAMS
+        host_conf.parameters = cached_config.hosts_conf[0].parameters
+
+        return host_conf
 
     @staticmethod
     def _populate_host_conf_params(host_conf, cmd_input_params, script_params_resource_attr, service_data):
@@ -599,7 +657,7 @@ class AnsibleSecondGenLogic(object):
         populate all top level data outside of the hosts list
         no return value - side effect helper to populate ansi_conf object
         :param AnsibleConfigurationRequest2G ansi_conf:
-        :param PlaybookRepoDecryptedPassword repo_details:
+        :param CachedPlaybookRepoDecryptedPassword repo_details:
         :param GenericServiceData service_data:
         :param CachedAnsibleConfiguration cached_config:
         :return:
@@ -619,7 +677,7 @@ class AnsibleSecondGenLogic(object):
         populate all top level data outside of the hosts list
         no return value - side effect helper to populate ansi_conf object
         :param AnsibleConfigurationRequest2G ansi_conf:
-        :param PlaybookRepoDecryptedPassword repo_details:
+        :param CachedPlaybookRepoDecryptedPassword repo_details:
         :param GenericServiceData service_data:
         :param CachedAnsibleConfiguration cached_config:
         :return:
@@ -650,223 +708,29 @@ class AnsibleSecondGenLogic(object):
             script_params_2g = []
         return script_params_2g
 
-    # old method for reference
-    def ____get_ansible_config_json(self, service_data, api, reporter, target_host_resources, repo_details,
-                                    sandbox_data, script_params=None, is_global_playbook=False, is_mgmt_playbook=False):
-        """
-        Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
-        :param GenericAnsibleServiceData service_data:
-        :param CloudShellAPISession api:
-        :param SandboxReporter reporter:
-        :param list[ResourceInfo] target_host_resources: resources to run playbook against
-        :param PlaybookRepoDecryptedPassword repo_details:
-        :param list[SandboxDataKeyValueInfo] sandbox_data:
-        :param str script_params:
-        :param bool is_global_playbook:
-        :param bool is_mgmt_playbook:
-        :return:
-        """
-        # unpack service data
-        service_name = service_data.service_name
-        service_connection_method = service_data.connection_method
-        service_inventory_groups = service_data.inventory_groups
-        service_script_parameters = service_data.script_parameters
-        service_additional_args = service_data.additional_args
-        service_timeout_minutes = service_data.timeout_minutes
-
-        # REPORT TARGET RESOURCES
-        resource_names = [x.Name for x in target_host_resources]
-        start_msg = "'{}' Target Hosts :\n{}".format(service_name, json.dumps(resource_names, indent=4))
-        reporter.info_out(start_msg)
-
-        # INITIALIZE CONFIG REQUEST DATA MODEL AND START POPULATING
-        ansi_conf = AnsibleConfigurationRequest2G()
-        ansi_conf.additionalArgs = service_additional_args if service_additional_args else None
-        ansi_conf.timeoutMinutes = int(service_timeout_minutes) if service_timeout_minutes else 0
-
-        # REPO DETAILS - REPO PASSWORD EXPECTED AS PLAIN TEXT DECRYPTED STRING
-        ansi_conf.repositoryDetails.url = repo_details.url
-        ansi_conf.repositoryDetails.username = repo_details.username
-        ansi_conf.repositoryDetails.password = repo_details.decrypted_password
-
-        # TAKE COMMAND INPUT AS PRIORITY, FALLBACK TO SERVICE ATTR VALUE
-        # THIS WILL BE MERGED WITH CACHED VARS IN LOOP FOR EACH RESOURCE
-        if script_params:
-            script_params_2g = build_params_list(script_params)
-        elif service_script_parameters:
-            script_params_2g = build_params_list(service_script_parameters)
+    def get_playbook_target_resources(self, api, reporter, res_id, context, config_selector, service_name,
+                                      service_data):
+        if context.connectors or config_selector:
+            # GET CONNECTED RESOURCES / MATCHING CONFIG SELECTOR RESOURCES
+            target_host_resources = self.get_linked_resources(api, service_name, res_id, context.connectors,
+                                                              service_data.config_selector, reporter)
+        elif service_data.inventory_groups:
+            # RESOURCES WITH MATCHING INVENTORY GROUP VALUE
+            target_host_resources = self.get_matching_inventory_group_resources(api, res_id,
+                                                                                service_data.inventory_groups)
         else:
-            script_params_2g = []
+            # FALL BACK TO ALL CANVAS RESOURCES
+            target_host_resources = self.get_all_canvas_resources(api, res_id)
+        return target_host_resources
 
-        """ START POPULATING HOSTS IN LOOP """
-        missing_credential_hosts = []
-        for curr_resource_obj in target_host_resources:
-            curr_resource_name = curr_resource_obj.Name
-
-            # the goal here was to read "user" playbook data stored to sandbox during management playbook run
-            cached_ansible_conf = self.get_cached_ansi_conf_from_resource_name(curr_resource_name, sandbox_data)
-
-            # START BUILDING REQUEST
-            host_conf = HostConfigurationRequest2G()
-            host_conf.ip = curr_resource_obj.Address
-            host_conf.resource_name = curr_resource_name
-
-            # USER ATTR FROM LOGICAL RESOURCE
-            attrs = curr_resource_obj.ResourceAttributes
-            user_attr = get_resource_attribute_gen_agostic("User", attrs)
-            user_attr_val = user_attr.Value if user_attr else ""
-            host_conf.username = user_attr_val
-
-            # HOST PASSWORD EXPECTED AS ENCRYPTED VALUE
-            password_attr = get_resource_attribute_gen_agostic("Password", attrs)
-            encrypted_password_val = password_attr.Value
-            host_conf.password = encrypted_password_val
-
-            # ACCESS KEY - THIS ATTRIBUTE HAS TO BE CREATED ON LOGICAL RESOURCE - SHOULD BE ENCRYPTED PASSWORD ATTR
-            access_key_attr = get_resource_attribute_gen_agostic(override_attributes.ACCESS_KEY_ATTR, attrs)
-            encrypted_access_key_val = access_key_attr.Value if access_key_attr else None
-            host_conf.accessKey = encrypted_access_key_val
-
-            # VALIDATE HOST CREDENTIALS - NEED USER AND PASSWORD/ACCESS KEY
-            if user_attr_val:
-                decrypted_password = api.DecryptPassword(encrypted_password_val).Value
-                if encrypted_access_key_val:
-                    decrypted_access_key = api.DecryptPassword(encrypted_access_key_val).Value
-                else:
-                    decrypted_access_key = None
-
-                if not decrypted_password and not decrypted_access_key:
-                    missing_credential_hosts.append((curr_resource_name, "Missing Credentials Attribute"))
-            else:
-                missing_credential_hosts.append((curr_resource_name, "Empty User Attribute on Resource"))
-
-            # INVENTORY GROUPS
-            """ 
-            PRIORITY: 
-            1. populated resource attribute 
-            2. cached user playbook inventory groups
-            3. for 'global' playbook leave empty 
-            4. linked playbook service will broadcast default value
-            """
-            cached_user_pb_inventory_groups_str = get_cached_user_pb_inventory_groups_str(cached_ansible_conf) \
-                if cached_ansible_conf else None
-            resource_ansible_group_attr = get_resource_attribute_gen_agostic(override_attributes.INVENTORY_GROUP_ATTR,
-                                                                             attrs)
-            if resource_ansible_group_attr and resource_ansible_group_attr.Value:
-                groups_str = resource_ansible_group_attr.Value
-            elif cached_user_pb_inventory_groups_str:
-                groups_str = cached_user_pb_inventory_groups_str
-            elif is_global_playbook:
-                groups_str = None
-            else:
-                groups_str = service_inventory_groups
-
-            # INVENTORY GROUPS NEEDS TO BE A LIST OR NULL/NONE TO FULFILL CONTRACT WITH PACKAGE DRIVER
-            if groups_str:
-                inventory_groups_list = groups_str.strip().split(",")
-            else:
-                inventory_groups_list = None
-
-            # RERUN WITH MGMT PLAYBOOK GROUPS VALUE
-            if is_mgmt_playbook:
-                cached_mgmt_pb_inventory_groups_list = get_cached_mgmt_pb_inventory_groups_list(cached_ansible_conf) \
-                    if cached_ansible_conf else None
-                if cached_mgmt_pb_inventory_groups_list:
-                    host_conf.groups = cached_mgmt_pb_inventory_groups_list
-            else:
-                host_conf.groups = inventory_groups_list
-
-            # CONNECTION METHOD
-            """ 
-            PRIORITY: 
-            1. populated resource attribute 
-            2. cached user playbook connection method 
-            3. default mgmt playbook connection method 
-            4. 2G service value as fallback
-            only way to override cached app value is with resource attribute 
-            """
-            resource_attr_connection_method = None
-            connection_method_attr = get_resource_attribute_gen_agostic(override_attributes.CONNECTION_METHOD_ATTR,
-                                                                        attrs)
-            if connection_method_attr:
-                connection_val = connection_method_attr.Value
-                if connection_val:
-                    if connection_val.lower() not in ["na", "n/a"]:
-                        resource_attr_connection_method = connection_val
-
-            if resource_attr_connection_method:
-                host_conf.connectionMethod = resource_attr_connection_method
-            elif cached_ansible_conf:
-                cached_mgmt_pb_connection_method = cached_ansible_conf.hosts_conf[0].connection_method
-                cached_params_dict = cached_ansible_conf.hosts_conf[0].parameters
-                cached_user_pb_connection_method = cached_params_dict.get(user_pb_params.CONNECTION_METHOD_PARAM)
-                if cached_user_pb_connection_method:
-                    host_conf.connectionMethod = cached_user_pb_connection_method
-                else:
-                    host_conf.connectionMethod = cached_mgmt_pb_connection_method
-            else:
-                host_conf.connectionMethod = service_connection_method
-
-            # CONNECTION SECURED
-            connection_secured_attr = get_resource_attribute_gen_agostic(override_attributes.CONNECTION_SECURED_ATTR,
-                                                                         attrs)
-            if connection_secured_attr:
-                host_conf.connectionSecured = True if connection_secured_attr.Value.lower() == "true" else False
-            else:
-                host_conf.connectionSecured = False
-
-            # SCRIPT PARAMS
-            script_params_attr = get_resource_attribute_gen_agostic(override_attributes.SCRIPT_PARAMS_ATTR, attrs)
-            if script_params_attr:
-                if script_params_attr.Value:
-                    host_conf.parameters = build_params_list(script_params_attr.Value)
-                else:
-                    host_conf.parameters = script_params_2g
-            else:
-                host_conf.parameters = script_params_2g
-
-            # MERGE CACHED APP PARAMS - SERVICE LEVEL PARAMS WIN IN CASE OF CONFLICT
-            if cached_ansible_conf:
-                cached_params_dict = cached_ansible_conf.hosts_conf[0].parameters
-                cached_params_list = []
-                service_params_copy = host_conf.parameters[:]
-                for cached_key, cached_val in cached_params_dict.iteritems():
-                    if cached_val:
-                        for service_param in service_params_copy:
-                            service_key = service_param["name"]
-                            service_val = service_param["value"]
-                            if service_key == cached_key:
-                                if not service_val:
-                                    cached_params_list.append({"name": cached_key, "value": cached_val})
-                                    continue
-                                else:
-                                    continue
-                        cached_params_list.append({"name": cached_key, "value": cached_val})
-                host_conf.parameters.extend(cached_params_list)
-
-            ansi_conf.hostsDetails.append(host_conf)
-
-        """ EXITING THE BIG FOR LOOP """
-
-        # VALIDATE MISSING CREDENTIALS ON HOSTS
-        if missing_credential_hosts:
-            missing_json = json.dumps(missing_credential_hosts, indent=4)
-            warning_msg = "=== '{}' Connected Hosts Missing Credentials ===\n{}".format(service_name, missing_json)
-            reporter.info_out(warning_msg)
-            err_msg = "Missing credentials on target hosts. See console / logs for info."
-            raise Exception(err_msg)
-
-        ansi_conf_json = ansi_conf.get_pretty_json()
-
-        # hide repo password in json printout
-        new_obj = json.loads(ansi_conf_json)
-        curr_password = new_obj["repositoryDetails"]["password"]
-        if curr_password:
-            new_obj["repositoryDetails"]["password"] = "*******"
-        json_copy = json.dumps(new_obj, indent=4)
-        reporter.info_out("=== Ansible Configuration JSON ===\n{}".format(json_copy), log_only=True)
-
-        return ansi_conf_json
+    def get_user_playbook_target_resources(self, api, context, reporter, res_id, service_data, service_name):
+        if context.connectors:
+            target_host_resources = self.get_linked_resources(api, service_name, res_id, context.connectors,
+                                                              service_data.config_selector, reporter)
+        else:
+            target_resource = self.get_user_pb_target_resource_from_alias(service_name, api, reporter)
+            target_host_resources = [target_resource]
+        return target_host_resources
 
     @staticmethod
     def get_sandbox_reporter(context, api):
