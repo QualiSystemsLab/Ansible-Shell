@@ -35,22 +35,25 @@ class PlaybookRepository(object):
 
 
 class HostConfigurationRequest2G(object):
-    """ camelCase attributes are reserved JSON keys, snake_case is extra added member """
+    """ camelCase attributes are reserved JSON keys sent by server - will be converted appropriately """
 
     def __init__(self):
-        self.ip = None
-        self.connectionMethod = None
-        self.connectionSecured = None
-        self.username = None
-        self.password = None
-        self.accessKey = None
-        self.groups = None
-        self.parameters = None
-        self.resourceName = None
+        self.ip = ""
+        self.connectionMethod = ""
+        self.connectionSecured = ""
+        self.username = ""
+        self.password = ""  # encrypted or decrypted password will work
+        self.accessKey = ""
+        self.groups = ""
+        self.parameters = []  # list of dicts {"name": "param1", "value": "val1"}
+        self.resourceName = ""
 
 
 class GenericAnsibleServiceData(object):
-    """ generic data structure to be populated from the admin and regular service attributes """
+    """
+    generic data structure to be populated from the admin and regular service attributes
+    all string types
+    """
 
     def __init__(self, service_name, connection_method, inventory_groups, script_parameters, additional_args,
                  timeout_minutes, config_selector, repo_user, repo_password, repo_url, repo_base_path,

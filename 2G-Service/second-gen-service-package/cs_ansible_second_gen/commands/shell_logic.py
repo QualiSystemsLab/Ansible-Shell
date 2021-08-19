@@ -13,6 +13,7 @@ from cs_ansible_second_gen.models.ansible_configuration_request import AnsibleCo
 from cs_ansible_second_gen.service_globals import user_pb_params, override_attributes, utility_globals
 from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
 from cs_ansible_second_gen.commands.utility.resource_helpers import get_normalized_attrs_dict
+from cs_ansible_second_gen.commands.utility.common_helpers import get_list_of_param_dicts
 
 
 class AnsibleSecondGenLogic(object):
@@ -555,7 +556,7 @@ class AnsibleSecondGenLogic(object):
             host_conf.connectionSecured = True if resource_attr_connection_secured.lower() == "true" else False
 
         # SCRIPT PARAMS
-        host_conf.parameters = cached_config.hosts_conf[0].parameters
+        host_conf.parameters = get_list_of_param_dicts(cached_config.hosts_conf[0].parameters)
 
         return host_conf
 
@@ -609,7 +610,7 @@ class AnsibleSecondGenLogic(object):
             host_conf.connectionSecured = True if resource_attr_connection_secured.lower() == "true" else False
 
         # SCRIPT PARAMS
-        host_conf.parameters = cached_config.hosts_conf[0].parameters
+        host_conf.parameters = get_list_of_param_dicts(cached_config.hosts_conf[0].parameters)
 
         return host_conf
 

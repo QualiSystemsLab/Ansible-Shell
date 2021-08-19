@@ -59,6 +59,16 @@ def dict_to_ordered_json(input_dict, key_order_list):
     return json_dict
 
 
+def get_list_of_param_dicts(input_dict):
+    """
+    {"param1": "val1", "param2": "val2"} --> [{"name": "param1", "value": "val1"}, {"name": "param1", "value": "val1"}]
+    take cached dict of params and create list of dicts to match how quali server sends request
+    :param dict input_dict:
+    :return:
+    """
+    return [{"name": key, "value": value} for key, value in input_dict.items()]
+
+
 if __name__ == "__main__":
     order_of_keys = ["key1", "key2", "key3"]
     my_dict = {
