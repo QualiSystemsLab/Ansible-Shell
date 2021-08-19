@@ -1,4 +1,4 @@
-DRIVER_SERVICE_NAME_PREFIX = "Ansible_MGMT"
+DRIVER_SERVICE_NAME_PREFIX = "MPB"
 ANSIBLE_MGMT_FAILED_PREFIX = "failed_execution_"
 
 # family app attributes

@@ -1,6 +1,5 @@
 import json
 from cloudshell.api.cloudshell_api import CloudShellAPISession
-import urllib
 from cloudshell.cm.ansible.domain.Helpers.parse_script_path_from_repo_url import parse_script_path_from_url, get_net_loc_from_url
 from cloudshell.cm.ansible.domain.driver_globals import DRIVER_SERVICE_NAME_PREFIX
 

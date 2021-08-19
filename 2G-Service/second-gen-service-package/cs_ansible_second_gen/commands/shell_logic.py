@@ -138,11 +138,13 @@ class AnsibleSecondGenLogic(object):
         if not service_name:
             raise AnsibleSecondGenServiceException("User Playbook Alias is not populated")
 
-        if not service_name.startswith("PB_"):
+        if not service_name.startswith(utility_globals.USER_PLAYBOOK_SERVICE_PREFIX):
             raise AnsibleSecondGenServiceException(
-                "User Playbook alias does not start with PB. Current Alias: {}".format(service_name))
+                "User Playbook alias does not start with '{}'. Current Alias: {}".format(
+                    utility_globals.USER_PLAYBOOK_SERVICE_PREFIX,
+                    service_name))
 
-        resource_name = service_name.split("PB_")[1]
+        resource_name = service_name.split("{}_".format(utility_globals.USER_PLAYBOOK_SERVICE_PREFIX))[1]
 
         # validate that resource name is real
         try:
@@ -667,7 +669,7 @@ class AnsibleSecondGenLogic(object):
         ansi_conf.timeoutMinutes = cached_config.timeout_minutes
 
         # REPO DETAILS - REPO PASSWORD EXPECTED AS PLAIN TEXT DECRYPTED STRING
-        ansi_conf.repositoryDetails.url =  cached_config.playbook_repo.url
+        ansi_conf.repositoryDetails.url = cached_config.playbook_repo.url
         ansi_conf.repositoryDetails.username = cached_config.playbook_repo.username
         ansi_conf.repositoryDetails.password = cached_config.playbook_repo.decrypted_password
 
@@ -744,7 +746,7 @@ class AnsibleSecondGenLogic(object):
         model = context.resource.model
         service_name = context.resource.name
         # Logic for prefixing log files with SVC for services
-        log_name_prefix = "SVC_" if "PB" not in service_name else ""
+        log_name_prefix = "SVC_" if utility_globals.USER_PLAYBOOK_SERVICE_PREFIX not in service_name else ""
         logger = get_qs_logger(log_group=res_id, log_category=model, log_file_prefix=log_name_prefix + service_name)
         reporter = SandboxReporter(api, res_id, logger)
         return reporter
