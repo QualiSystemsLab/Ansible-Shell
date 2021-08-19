@@ -11,7 +11,7 @@ from cs_ansible_second_gen.models.ansible_config_from_cached_json import get_cac
 from cs_ansible_second_gen.models.ansible_configuration_request import AnsibleConfigurationRequest2G, \
     GenericAnsibleServiceData, HostConfigurationRequest2G, PlaybookRepository
 from cs_ansible_second_gen.service_globals import user_pb_params, override_attributes, utility_globals
-from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo, ResourceAttribute
+from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
 from cs_ansible_second_gen.commands.utility.resource_helpers import get_normalized_attrs_dict
 
 
@@ -257,8 +257,9 @@ class AnsibleSecondGenLogic(object):
 
         return url
 
-    def get_repo_details(self, playbook_path, reporter, service_data, supported_protocols):
+    def get_repo_details(self, api, playbook_path, reporter, service_data, supported_protocols):
         """
+        :param CloudShellAPISession api:
         :param playbook_path:
         :param reporter:
         :param service_data:
@@ -354,25 +355,23 @@ class AnsibleSecondGenLogic(object):
         self._log_ansi_conf_with_masked_password(ansi_conf_json, reporter)
         return ansi_conf_json
 
-    def get_cached_ansible_mgmt_config_json(self, service_data, target_resource, repo_details, cached_config, reporter):
+    def get_cached_ansible_mgmt_config_json(self, service_data, target_resource, cached_config, reporter):
         """
         Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
         :param GenericAnsibleServiceData service_data:
         :param ResourceInfo target_resource:
-        :param CachedPlaybookRepoDecryptedPassword repo_details:
         :param CachedAnsibleConfiguration cached_config:
         :param SandboxReporter reporter:
         :return:
         """
         # BUILD CONFIG REQUEST OBJECT
         ansi_conf = AnsibleConfigurationRequest2G()
-        self._populate_top_level_mgmt_ansi_conf(ansi_conf, repo_details, service_data, cached_config)
+        self._populate_top_level_mgmt_ansi_conf(ansi_conf, cached_config)
 
         # START BUILDING REQUEST FOR SINGLE HOST
         host_conf = HostConfigurationRequest2G()
 
-        # TODO - fix this shite
-        host_conf = self._populate_mgmt_pb_host_conf(host_conf, target_resource, service_data, cached_config)
+        host_conf = self._populate_mgmt_pb_host_conf(host_conf, target_resource, cached_config)
         ansi_conf.hostsDetails.append(host_conf)
 
         ansi_conf_json = ansi_conf.get_pretty_json()
@@ -561,12 +560,11 @@ class AnsibleSecondGenLogic(object):
         return host_conf
 
     @staticmethod
-    def _populate_mgmt_pb_host_conf(host_conf, curr_resource_obj, service_data, cached_config):
+    def _populate_mgmt_pb_host_conf(host_conf, curr_resource_obj, cached_config):
         """
         rerun the mgmt playbook
         :param HostConfigurationRequest2G host_conf:
         :param ResourceInfo curr_resource_obj:
-        :param GenericAnsibleServiceData service_data:
         :param CachedAnsibleConfiguration cached_config:
         :return:
         """
@@ -575,7 +573,6 @@ class AnsibleSecondGenLogic(object):
         attrs = curr_resource_obj.ResourceAttributes
         attrs_dict = {attr.Name: attr.Value for attr in attrs}
         attrs_dict = get_normalized_attrs_dict(attrs)
-
 
         host_conf.ip = curr_resource_obj.Address
         host_conf.resourceName = curr_resource_obj.Name
@@ -593,8 +590,12 @@ class AnsibleSecondGenLogic(object):
         cached_params_dict = cached_config.hosts_conf[0].parameters
 
         # INVENTORY GROUPS - cached management value on host
-        inventory_groups_list = cached_config.hosts_conf[0].groups.strip().split(",")
-        host_conf.groups = inventory_groups_list
+        inventory_groups_str = cached_config.hosts_conf[0].groups
+        if inventory_groups_str:
+            inventory_groups_list = inventory_groups_str.strip().split(",")
+            host_conf.groups = inventory_groups_list
+        else:
+            host_conf.groups = None
 
         # CONNECTION METHOD
         host_conf.connectionMethod = cached_config.hosts_conf[0].connection_method
@@ -652,13 +653,11 @@ class AnsibleSecondGenLogic(object):
         ansi_conf.repositoryDetails.password = repo_details.password
 
     @staticmethod
-    def _populate_top_level_mgmt_ansi_conf(ansi_conf, repo_details, service_data, cached_config):
+    def _populate_top_level_mgmt_ansi_conf(ansi_conf, cached_config):
         """
         populate all top level data outside of the hosts list
         no return value - side effect helper to populate ansi_conf object
         :param AnsibleConfigurationRequest2G ansi_conf:
-        :param CachedPlaybookRepoDecryptedPassword repo_details:
-        :param GenericServiceData service_data:
         :param CachedAnsibleConfiguration cached_config:
         :return:
         """
@@ -667,9 +666,9 @@ class AnsibleSecondGenLogic(object):
         ansi_conf.timeoutMinutes = cached_config.timeout_minutes
 
         # REPO DETAILS - REPO PASSWORD EXPECTED AS PLAIN TEXT DECRYPTED STRING
-        ansi_conf.repositoryDetails.url = repo_details.url
-        ansi_conf.repositoryDetails.username = repo_details.username
-        ansi_conf.repositoryDetails.password = repo_details.decrypted_password
+        ansi_conf.repositoryDetails.url =  cached_config.playbook_repo.url
+        ansi_conf.repositoryDetails.username = cached_config.playbook_repo.username
+        ansi_conf.repositoryDetails.password = cached_config.playbook_repo.decrypted_password
 
     @staticmethod
     def _populate_top_level_user_pb_ansi_conf(ansi_conf, repo_details, service_data, cached_config):

@@ -4,7 +4,7 @@ from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporte
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
 from cloudshell.cm.ansible.domain.connection_service import ConnectionService
 from cloudshell.cm.ansible.domain.exceptions import PlaybookDownloadException, \
-    AnsibleFailedConnectivityException
+    AnsibleFailedConnectivityException, AnsibleDriverException
 from cloudshell.cm.ansible.domain.ansible_command_executor import AnsibleCommandExecutor, ReservationOutputWriter
 from cloudshell.cm.ansible.domain.ansible_config_file import AnsibleConfigFile, get_user_ansible_cfg_config_keys
 from cloudshell.cm.ansible.domain.ansible_configuration import AnsibleConfigurationParser, AnsibleConfiguration, \
@@ -85,11 +85,11 @@ class AnsibleShell(object):
                         playbook_result = self._execute_playbook(command_context, ansi_conf_json, cancellation_context,
                                                                  api, res_id, service_name, logger, reporter)
                     except Exception as e:
-                        err_msg = "Error while executing playbook '{}'. {}: {}".format(service_name,
-                                                                                       type(e).__name__,
-                                                                                       str(e))
-                        reporter.err_out(err_msg)
-                        return "'{}' failed ansible execution".format(service_name)
+                        err_msg = "Ansible Service '{}' execution error. {}: {}".format(service_name,
+                                                                                        type(e).__name__,
+                                                                                        str(e))
+                        reporter.exc_out(err_msg)
+                        raise AnsibleDriverException(err_msg)
                     return playbook_result
 
     def ansible_sanity_check(self, reporter, service_name):
@@ -298,7 +298,7 @@ class AnsibleShell(object):
         auth = HttpAuth(repo.username, repo.password) if repo.password else None
         reporter.info_out(
             "'{}' Playbook DOWNLOADING from '{}' to ES '{}'..".format(service_name, repo.url_netloc,
-                                                                 self.execution_server_ip))
+                                                                      self.execution_server_ip))
         start_time = default_timer()
         try:
             playbook_name = self.downloader.get(ansi_conf.playbook_repo.url, auth, logger, cancellation_sampler)
@@ -456,9 +456,9 @@ class AnsibleShell(object):
                                       attributeValue=service_name)
             except Exception as e:
                 err_msg = "Error setting '{}' attribute for resource '{}'. {}: {}".format(target_log_attr,
-                                                                                                 curr_host.resource_name,
-                                                                                                 type(e).__name__,
-                                                                                                 str(e))
+                                                                                          curr_host.resource_name,
+                                                                                          type(e).__name__,
+                                                                                          str(e))
                 reporter.err_out(err_msg, log_only=True)
             else:
                 reporter.info_out("Log path attributes set successfully", log_only=True)

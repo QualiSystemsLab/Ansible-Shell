@@ -84,11 +84,10 @@ def get_cached_user_pb_repo_data(cached_ansible_conf):
     :return:
     """
     params_dict = cached_ansible_conf.hosts_conf[0].parameters
-
-    repo = PlaybookRepository()
+    repo = CachedPlaybookRepoDecryptedPassword()
     repo.url = params_dict.get(user_pb_params.REPO_URL_PARAM)
     repo.username = params_dict.get(user_pb_params.REPO_USERNAME_PARAM)
-    repo.password = params_dict.get(user_pb_params.REPO_PASSWORD_PARAM)
+    repo.decrypted_password = params_dict.get(user_pb_params.REPO_PASSWORD_PARAM)
     return repo
 
 

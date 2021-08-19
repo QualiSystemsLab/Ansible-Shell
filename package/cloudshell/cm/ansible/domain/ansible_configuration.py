@@ -83,24 +83,24 @@ class AnsibleConfigurationParser(object):
         :type json_str: str
         :rtype AnsibleConfiguration
         """
-        json_obj = json.loads(json_str)
-        AnsibleConfigurationParser._validate(json_obj)
+        ansi_conf_dict = json.loads(json_str)
+        AnsibleConfigurationParser._validate(ansi_conf_dict)
 
         ansi_conf = AnsibleConfiguration()
-        ansi_conf.additional_cmd_args = json_obj.get('additionalArgs')
-        ansi_conf.timeout_minutes = json_obj.get('timeoutMinutes', 0.0)
+        ansi_conf.additional_cmd_args = ansi_conf_dict.get('additionalArgs')
+        ansi_conf.timeout_minutes = ansi_conf_dict.get('timeoutMinutes', 0.0)
 
         # if using 2G wrapper service then skip the param override replacement step - all params come from service
-        is_second_gen_service = json_obj.get('isSecondGenService', False)
+        is_second_gen_service = ansi_conf_dict.get('isSecondGenService', False)
         ansi_conf.is_second_gen_service = is_second_gen_service
 
-        if json_obj.get('repositoryDetails'):
-            ansi_conf.playbook_repo.url = json_obj['repositoryDetails'].get('url')
-            ansi_conf.playbook_repo.username = json_obj['repositoryDetails'].get('username')
-            ansi_conf.playbook_repo.password = json_obj['repositoryDetails'].get('password')
+        if ansi_conf_dict.get('repositoryDetails'):
+            ansi_conf.playbook_repo.url = ansi_conf_dict['repositoryDetails'].get('url')
+            ansi_conf.playbook_repo.username = ansi_conf_dict['repositoryDetails'].get('username')
+            ansi_conf.playbook_repo.password = self._get_repo_password(ansi_conf_dict)
             ansi_conf.playbook_repo.url_netloc = get_net_loc_from_url(ansi_conf.playbook_repo.url)
 
-        for host_index, json_host in enumerate(json_obj.get('hostsDetails', [])):
+        for host_index, json_host in enumerate(ansi_conf_dict.get('hostsDetails', [])):
             host_conf = HostConfiguration()
             host_conf.ip = json_host.get('ip')
             host_conf.resource_name = json_host.get('resourceName')
@@ -115,7 +115,7 @@ class AnsibleConfigurationParser(object):
                 host_conf.parameters = all_params_dict
 
                 # CONSIDERING TO DEPRECATE THIS OVERRIDE FEATURE COMPLETELY AS IT OPENS POTENTIAL FOR BUGS
-                # PLAYBOOKS WITH MULTIPLE HOSTS CAN'T LOCICALLY OVERRIDE THE SINGLETON SCRIPT URL PARAMS
+                # PLAYBOOKS WITH MULTIPLE HOSTS CAN'T LOGICALLY OVERRIDE THE SINGLETON SCRIPT URL PARAMS
                 # if not is_second_gen_service:
                     # 2G service doesn't need override logic, this is only relevant for default flow
                     # ansi_conf = over_ride_defaults(ansi_conf, all_params_dict, host_index)
@@ -126,6 +126,15 @@ class AnsibleConfigurationParser(object):
     # catching decrpyt errors to use plain text passwords coming from 2G service
     def _get_password(self, json_host):
         pw = json_host.get('password')
+        if pw:
+            try:
+                return self.api.DecryptPassword(pw).Value
+            except Exception as e:
+                pass
+        return pw
+
+    def _get_repo_password(self, ansi_conf_dict):
+        pw = ansi_conf_dict['repositoryDetails'].get('password')
         if pw:
             try:
                 return self.api.DecryptPassword(pw).Value

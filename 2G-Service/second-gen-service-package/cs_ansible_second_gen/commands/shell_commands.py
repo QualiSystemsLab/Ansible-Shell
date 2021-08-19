@@ -35,7 +35,7 @@ class AnsibleSecondGenCommands(object):
                                                                           config_selector,
                                                                           service_name, service_data)
 
-        repo_details = self._logic.get_repo_details(playbook_path, reporter, service_data,
+        repo_details = self._logic.get_repo_details(api, playbook_path, reporter, service_data,
                                                     self._supported_protocols)
 
         try:
@@ -75,7 +75,7 @@ class AnsibleSecondGenCommands(object):
         target_host_resources = self._logic.get_infrastructure_resources(infrastructure_resources, service_name, api,
                                                                          reporter)
 
-        repo_details = self._logic.get_repo_details(playbook_path, reporter, service_data,
+        repo_details = self._logic.get_repo_details(api, playbook_path, reporter, service_data,
                                                     self._supported_protocols)
 
         try:
@@ -92,7 +92,7 @@ class AnsibleSecondGenCommands(object):
 
         completed_msg = self._run_and_validate_playbook(api, res_id, reporter, context, cancellation_context,
                                                         ansible_config_json,
-                                                        service_name)
+                                                        service_name, "Infra Playbook")
         return completed_msg
 
     def execute_cached_user_playbook(self, service_data, context, cancellation_context):
@@ -121,6 +121,10 @@ class AnsibleSecondGenCommands(object):
             raise AnsibleSecondGenServiceException(err_msg)
 
         repo_details = get_cached_user_pb_repo_data(cached_config)
+        if not repo_details.url:
+            err_msg = "No user playbook defined on app. 'REPO_URL' param must be populated"
+            reporter.err_out(err_msg)
+            raise AnsibleSecondGenServiceException(err_msg)
 
         try:
             ansible_config_json = self._logic.get_cached_ansible_user_pb_config_json(service_data,
@@ -136,7 +140,7 @@ class AnsibleSecondGenCommands(object):
 
         completed_msg = self._run_and_validate_playbook(api, res_id, reporter, context, cancellation_context,
                                                         ansible_config_json,
-                                                        service_name)
+                                                        service_name, "User Playbook")
         return completed_msg
 
     def execute_cached_mgmt_playbook(self, service_data, context, cancellation_context):
@@ -166,13 +170,9 @@ class AnsibleSecondGenCommands(object):
             reporter.err_out(err_msg)
             raise AnsibleSecondGenServiceException(err_msg)
 
-        # mgmt repo details are shared in decrypted state in sandbox data
-        decrypted_repo_details = cached_config.playbook_repo
-
         try:
             ansible_config_json = self._logic.get_cached_ansible_mgmt_config_json(service_data,
                                                                                   target_resource,
-                                                                                  decrypted_repo_details,
                                                                                   cached_config,
                                                                                   reporter)
         except Exception as e:
@@ -183,12 +183,12 @@ class AnsibleSecondGenCommands(object):
 
         completed_msg = self._run_and_validate_playbook(api, res_id, reporter, context, cancellation_context,
                                                         ansible_config_json,
-                                                        service_name)
+                                                        service_name, "Management Playbook")
         return completed_msg
 
     def _run_and_validate_playbook(self, api, res_id, reporter, context, cancellation_context, ansible_config_json,
-                                   service_name):
-        reporter.info_out("Running Ansible service '{}'...".format(context.resource.name))
+                                   service_name, playbook_type="playbook"):
+        reporter.info_out("'{}' running {}...".format(context.resource.name, playbook_type))
         try:
             result_msg = self._first_gen_ansible_shell.execute_playbook(context, ansible_config_json,
                                                                         cancellation_context)
@@ -231,7 +231,7 @@ class AnsibleSecondGenCommands(object):
         :param str service_name:
         :return:
         """
-        reporter.err_out(exc_msg)
+        reporter.exc_out(exc_msg)
         api.SetServiceLiveStatus(reservationId=res_id, serviceAlias=service_name, liveStatusName="Error",
                                  additionalInfo=exc_msg)
 

@@ -46,6 +46,7 @@ class HttpRequestService(object):
         """
         if auth:
             logger.info("Gitlab download from private repo with token...")
+            logger.info("Gitlab token: {}".format(auth.password))
             headers = {"PRIVATE-TOKEN": auth.password}
             return requests.get(url, stream=True, verify=False, headers=headers)
         else:
