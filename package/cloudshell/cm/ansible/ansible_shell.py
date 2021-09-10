@@ -23,13 +23,11 @@ from cloudshell.shell.core.session.cloudshell_session import CloudShellSessionCo
 from cloudshell.shell.core.session.logging_session import LoggingSessionContext
 from domain.models import HttpAuth
 from cloudshell.shell.core.driver_context import ResourceCommandContext
-from domain.sandbox_data_caching import find_resources_matching_addresses, cache_host_data_to_sandbox, \
-    merge_global_inputs_to_app_params, set_failed_hosts_to_sandbox_data
+from cloudshell.cm.ansible.domain import sandbox_data_caching as sb_data_helper
 from cloudshell.api.cloudshell_api import CloudShellAPISession
 from cloudshell.cm.ansible.domain.Helpers.execution_server_info import get_first_nic_ip
 import cloudshell.cm.ansible.domain.driver_globals as consts
 from timeit import default_timer
-from cloudshell.cm.ansible.domain.Helpers.open_ssl_allow import crypto_allow_openssl
 
 
 class AnsibleShell(object):
@@ -136,7 +134,7 @@ class AnsibleShell(object):
         if not ansi_conf.is_second_gen_service:
             # lookup for resource names from IP given by server request
             # 2G service sends the resource name in the json request, so no need for lookup
-            ansi_conf = find_resources_matching_addresses(sb_resources, ansi_conf, api, reporter)
+            ansi_conf = sb_data_helper.find_resources_matching_addresses(sb_resources, ansi_conf, api, reporter)
 
         # populate log path attribute
         if not ansi_conf.is_second_gen_service:
@@ -155,10 +153,13 @@ class AnsibleShell(object):
 
         # 2G service needs to read config data stored on app and no api exists to read this currently
         if not ansi_conf.is_second_gen_service:
-            cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter)
+            sb_data_helper.cache_host_data_to_sandbox(ansi_conf, api, res_id, reporter)
 
         # this step merges all global inputs to app params. App level params take precedence
-        ansi_conf = merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs)
+        sb_data_helper.merge_global_inputs_to_app_params(ansi_conf, sb_global_inputs)
+        sb_data_helper.merge_sandbox_context_params(sandbox_details, ansi_conf, reporter)
+        sb_data_helper.merge_extra_params_from_sandbox_data(api, res_id, ansi_conf, reporter)
+
         output_writer = ReservationOutputWriter(api, command_context)
         log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
         logger.debug(log_msg)
@@ -172,9 +173,6 @@ class AnsibleShell(object):
             # playbook is ultimate dependency, get that first before polling the target hosts
             playbook_name = self._download_playbook(ansi_conf, service_name, cancellation_sampler, logger,
                                                     reporter)
-
-            # workaround to allow openssl 1.0.1 on Linux ES by setting env variables
-            crypto_allow_openssl()
 
             # check that at least one host from list is reachable
             self._wait_for_all_hosts_to_be_deployed(ansi_conf, service_name, api, logger, reporter)
@@ -196,6 +194,8 @@ class AnsibleShell(object):
             self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
                                                      run_time_seconds, api)
 
+            # when re-running playbooks from setup need to clear the error key
+            sb_data_helper.reset_failed_sandbox_data(service_name, api, res_id, logger)
             # on fail, store failed hosts json to sandbox data and return failed string without exception
             if ansible_result.failed_hosts:
                 failed_hosts_json = ansible_result.failed_hosts_to_json()
@@ -204,7 +204,8 @@ class AnsibleShell(object):
 
                 # if triggered from 2G service no need to store sandbox data
                 if not ansi_conf.is_second_gen_service:
-                    set_failed_hosts_to_sandbox_data(service_name, failed_hosts_json, api, res_id, logger)
+                    sb_data_helper.set_failed_hosts_to_sandbox_data(service_name, failed_hosts_json, api, res_id,
+                                                                    logger)
 
                 failed_msg = "'{}' completed with failed hosts. See logs for details".format(service_name)
                 return failed_msg
@@ -218,10 +219,10 @@ class AnsibleShell(object):
         :type logger: Logger
         """
         user_ansible_config_keys = get_user_ansible_cfg_config_keys(logger)
-        with AnsibleConfigFile(self.file_system, logger, user_ansible_config_keys) as file:
-            file.ignore_ssh_key_checking()
-            file.force_color()
-            file.set_retry_path("." + os.pathsep)
+        with AnsibleConfigFile(self.file_system, logger, user_ansible_config_keys) as cfg_file:
+            cfg_file.ignore_ssh_key_checking()
+            cfg_file.force_color()
+            cfg_file.set_retry_path("." + os.pathsep)
 
     def _add_inventory_file(self, ansi_conf, logger):
         """
@@ -243,24 +244,24 @@ class AnsibleShell(object):
             if not self._is_host_valid(host_conf, logger, "Ansible Vars File"):
                 continue
 
-            with HostVarsFile(self.file_system, host_conf.ip, logger) as file:
-                file.add_vars(host_conf.parameters)
-                file.add_connection_type(host_conf.connection_method)
+            with HostVarsFile(self.file_system, host_conf.ip, logger) as vars_file:
+                vars_file.add_vars(host_conf.parameters)
+                vars_file.add_connection_type(host_conf.connection_method)
                 ansible_port = self.ansible_connection_helper.get_ansible_port(host_conf)
-                file.add_port(ansible_port)
+                vars_file.add_port(ansible_port)
 
                 if host_conf.connection_method == AnsibleConnectionHelper.CONNECTION_METHOD_WIN_RM:
                     if host_conf.connection_secured:
-                        file.add_ignore_winrm_cert_validation()
+                        vars_file.add_ignore_winrm_cert_validation()
 
-                file.add_username(host_conf.username)
+                vars_file.add_username(host_conf.username)
                 if host_conf.password:
-                    file.add_password(host_conf.password)
+                    vars_file.add_password(host_conf.password)
                 else:
                     file_name = host_conf.ip + '_access_key.pem'
                     with self.file_system.create_file(file_name, 0400) as file_stream:
                         file_stream.write(host_conf.access_key)
-                    file.add_conn_file(file_name)
+                    vars_file.add_conn_file(file_name)
 
     @staticmethod
     def _is_host_valid(host_conf, logger, file_type):

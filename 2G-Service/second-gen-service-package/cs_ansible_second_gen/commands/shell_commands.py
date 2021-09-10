@@ -113,10 +113,11 @@ class AnsibleSecondGenCommands(object):
                                                                                service_name)
         self._validate_cached_playbook_target_hosts_count(reporter, service_name, target_host_resources)
         target_resource = target_host_resources[0]
-        cached_config = self._logic.get_cached_ansi_conf_from_resource_name(target_resource.Name, sandbox_data)
 
-        if not cached_config:
-            err_msg = "No cached data for USER playbook '{}'".format(target_resource.Name)
+        try:
+            cached_config = self._logic.get_cached_ansi_conf_from_resource_name(target_resource.Name, sandbox_data)
+        except Exception as e:
+            err_msg = "Issue getting cached config for user playbook. {}: {}".format(type(e).__name__, str(e))
             reporter.err_out(err_msg)
             raise AnsibleSecondGenServiceException(err_msg)
 

@@ -1,9 +1,10 @@
 import json
 
 """
-These data model keys are what is expected by package driver when parsing
+This object is used for BUILDING the json request.
+These data model keys are what is expected by package driver when parsing. 
 These are same keys that Quali server sends with it's request
-Note the camelCase of attributes, these are dumped directly to json
+Note the camelCase of attributes, these are dumped directly to json keys that server expects
 """
 
 

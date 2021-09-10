@@ -4,12 +4,6 @@ from cloudshell.cm.ansible.domain.Helpers.parse_script_path_from_repo_url import
 from cloudshell.cm.ansible.domain.driver_globals import DRIVER_SERVICE_NAME_PREFIX
 
 
-# OPTIONAL SCRIPT PARAMETERS, IF PRESENT WILL OVERRIDE THE DEFAULT READ-ONLY VALUES
-# THESE SHOULD BE CUSTOM PARAMS DEFINED ON APP
-CONNECTION_METHOD_PARAM = "CONNECTION_METHOD"
-ACCESS_KEY_PARAM = "ACCESS_KEY"
-
-
 class AnsibleConfiguration(object):
     def __init__(self, playbook_repo=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
         """
@@ -48,24 +42,6 @@ class HostConfiguration(object):
         self.parameters = {}
         self.resource_name = None
         self.health_check_passed = False
-
-
-def over_ride_defaults(ansi_conf, params_dict, host_index):
-    """
-    go over custom params and over-ride values for HOSTS only
-    :param AnsibleConfiguration ansi_conf:
-    :param dict params_dict:
-    :return same config:
-    :rtype AnsibleConfiguration
-    """
-
-    if params_dict.get(CONNECTION_METHOD_PARAM):
-        ansi_conf.hosts_conf[host_index].connection_method = params_dict[CONNECTION_METHOD_PARAM].lower()
-
-    if params_dict.get(ACCESS_KEY_PARAM):
-        ansi_conf.hosts_conf[host_index].connection_method = params_dict[CONNECTION_METHOD_PARAM].lower()
-
-    return ansi_conf
 
 
 class AnsibleConfigurationParser(object):
@@ -112,12 +88,6 @@ class AnsibleConfigurationParser(object):
             if json_host.get('parameters'):
                 all_params_dict = dict((i['name'], i['value']) for i in json_host['parameters'])
                 host_conf.parameters = all_params_dict
-
-                # CONSIDERING TO DEPRECATE THIS OVERRIDE FEATURE COMPLETELY AS IT OPENS POTENTIAL FOR BUGS
-                # PLAYBOOKS WITH MULTIPLE HOSTS CAN'T LOGICALLY OVERRIDE THE SINGLETON SCRIPT URL PARAMS
-                # if not is_second_gen_service:
-                    # 2G service doesn't need override logic, this is only relevant for default flow
-                    # ansi_conf = over_ride_defaults(ansi_conf, all_params_dict, host_index)
             ansi_conf.hosts_conf.append(host_conf)
 
         return ansi_conf
@@ -193,7 +163,8 @@ class AnsibleServiceNameParser(object):
 
     def __init__(self, ansible_json):
         """
-        :type api: CloudShellAPISession
+        for some custom actions
+        :param str ansible_json:
         """
         self._ansible_json = ansible_json
         self.is_second_gen_service = False
@@ -201,11 +172,6 @@ class AnsibleServiceNameParser(object):
         self._load_json()
 
     def _load_json(self):
-        """
-        Decodes a json string to an AnsibleConfiguration instance.
-        :type json_str: str
-        :rtype AnsibleConfiguration
-        """
         json_obj = json.loads(self._ansible_json)
         self.is_second_gen_service = json_obj.get('isSecondGenService', False)
         self.repo_url = json_obj['repositoryDetails'].get('url')

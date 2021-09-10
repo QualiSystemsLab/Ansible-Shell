@@ -1,20 +1,18 @@
-from cloudshell.cm.ansible.domain.ansible_configuration import PlaybookRepository
 from cs_ansible_second_gen.service_globals import user_pb_params
 import json
 
 
 class CachedAnsibleConfiguration(object):
-    def __init__(self, playbook_repo_decrypted_password=None, hosts_conf=None, additional_cmd_args=None, timeout_minutes=None):
-        """
-        :type playbook_repo_decrypted_password: CachedPlaybookRepoDecryptedPassword
-        :type hosts_conf: list[CachedHostConfiguration]
-        :type additional_cmd_args: str
-        :type timeout_minutes: float
-        """
-        self.timeout_minutes = timeout_minutes or 0.0
-        self.playbook_repo = playbook_repo_decrypted_password or CachedPlaybookRepoDecryptedPassword()
-        self.hosts_conf = hosts_conf or []
-        self.additional_cmd_args = additional_cmd_args
+    def __init__(self):
+        """ data model for rebuilding the cached data """
+        self.timeout_minutes = 0.0
+        """:type : float"""
+        self.playbook_repo = None
+        """:type : CachedPlaybookRepoDecryptedPassword"""
+        self.hosts_conf = []
+        """:type : list[CachedHostConfiguration]"""
+        self.additional_cmd_args = ""
+        """:type : str"""
         self.is_second_gen_service = True
 
 
@@ -28,15 +26,15 @@ class CachedPlaybookRepoDecryptedPassword(object):
 
 class CachedHostConfiguration(object):
     def __init__(self):
-        self.ip = None
-        self.connection_method = None
-        self.connection_secured = None
-        self.username = None
-        self.password = None
-        self.access_key = None
+        self.ip = ""
+        self.connection_method = ""
+        self.connection_secured = False
+        self.username = ""
+        self.password = ""
+        self.access_key = ""
         self.groups = []
         self.parameters = {}
-        self.resource_name = None
+        self.resource_name = ""
 
 
 def get_cached_ansible_config_from_json(input_json):

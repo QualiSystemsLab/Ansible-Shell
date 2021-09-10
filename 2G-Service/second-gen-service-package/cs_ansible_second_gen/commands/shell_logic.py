@@ -14,6 +14,7 @@ from cs_ansible_second_gen.service_globals import user_pb_params, override_attri
 from cloudshell.api.cloudshell_api import CloudShellAPISession, ResourceInfo
 from cs_ansible_second_gen.commands.utility.resource_helpers import get_normalized_attrs_dict
 from cs_ansible_second_gen.commands.utility.common_helpers import get_list_of_param_dicts
+from cloudshell.api.cloudshell_api import SandboxDataKeyValueInfo
 
 
 class AnsibleSecondGenLogic(object):
@@ -32,16 +33,18 @@ class AnsibleSecondGenLogic(object):
         :return:
         """
         connector_resources = self._get_resources_from_connectors(api, service_name, connectors, reporter)
-        connector_resource_names = [x.Name for x in connector_resources]
-        selector_linked_resource_names = self._get_selector_linked_resource_names(api, res_id, config_selector)
-        all_linked_resources = connector_resource_names + selector_linked_resource_names
+        selector_linked_resources = self._get_selector_linked_resources(api, res_id, config_selector)
+        all_linked_resources = connector_resources + selector_linked_resources
 
         if not all_linked_resources:
             exc_msg = "No target hosts linked to Service '{}'.".format(service_name)
             reporter.err_out(exc_msg)
             raise AnsibleSecondGenServiceException(exc_msg)
 
-        target_host_resource_names = list(set(all_linked_resources))
+        all_linked_resource_names = [x.Name for x in all_linked_resources]
+
+        # use a set to eliminate duplicates
+        target_host_resource_names = list(set(all_linked_resource_names))
         target_host_resources = [api.GetResourceDetails(x) for x in target_host_resource_names]
         return target_host_resources
 
@@ -162,15 +165,21 @@ class AnsibleSecondGenLogic(object):
         """
         :param str resource_name:
         :param list[SandboxDataKeyValueInfo] sandbox_data:
+        :rtype CachedAnsibleConfiguration:
         :return:
         """
         matching_sb_data = [x for x in sandbox_data
                             if "ansible_{}".format(resource_name) == x.Key]
-        if matching_sb_data:
-            cached_resource_data_json = matching_sb_data[0].Value
-            cached_ansible_conf = get_cached_ansible_config_from_json(cached_resource_data_json)
-            return cached_ansible_conf
-        return None
+        if not matching_sb_data:
+            raise Exception("No matching SB data for '{}'".format(resource_name))
+        if len(matching_sb_data) > 1:
+            data_dict = {data.Key: data.Value for data in matching_sb_data}
+            data_json = json.dumps(data_dict, indent=4)
+            raise Exception("More than one key found for resource name:\n{}".format(data_json))
+
+        cached_resource_data_json = matching_sb_data[0].Value
+        cached_ansible_conf = get_cached_ansible_config_from_json(cached_resource_data_json)
+        return cached_ansible_conf
 
     @staticmethod
     def _append_gitlab_url_suffix(url, branch):
@@ -290,6 +299,9 @@ class AnsibleSecondGenLogic(object):
         :param SandboxReporter reporter:
         :return:
         """
+        if not connectors:
+            return []
+
         connector_endpoints = get_connector_endpoints(service_name, connectors)
 
         # get connected resource names
@@ -305,7 +317,7 @@ class AnsibleSecondGenLogic(object):
         return resource_detail_objects
 
     @staticmethod
-    def _get_selector_linked_resource_names(api, res_id, selector_value):
+    def _get_selector_linked_resources(api, res_id, selector_value):
         """
         scan sandbox and find resources with matching selector value
         :param str selector_value:
@@ -313,19 +325,19 @@ class AnsibleSecondGenLogic(object):
         :param res_id:
         :return:
         """
+        selector_linked_resources = []
         if not selector_value:
             return []
 
         all_resources = api.GetReservationDetails(reservationId=res_id).ReservationDescription.Resources
-        selector_linked_resources = []
         for resource in all_resources:
-            details = api.GetResourceDetails(resource.Name)
-            attrs = details.ResourceAttributes
+            resource_details = api.GetResourceDetails(resource.Name)
+            attrs = resource_details.ResourceAttributes
             attr_search = [x for x in attrs if x.Name == "Ansible Config Selector"]
             if attr_search:
                 attr_val = attr_search[0].Value
                 if attr_val and attr_val.lower() == selector_value.lower():
-                    selector_linked_resources.append(resource.Name)
+                    selector_linked_resources.append(resource_details)
         return selector_linked_resources
 
     def get_ansible_config_json(self, service_data, target_host_resources, repo_details, reporter,
@@ -394,11 +406,11 @@ class AnsibleSecondGenLogic(object):
         """
         # BUILD CONFIG REQUEST OBJECT
         ansi_conf = AnsibleConfigurationRequest2G()
-        self._populate_top_level_user_pb_ansi_conf(ansi_conf, repo_details, service_data, cached_config)
+        self._populate_top_level_user_pb_ansi_conf(ansi_conf, repo_details, cached_config)
 
         # START BUILDING REQUEST FOR SINGLE HOST
         host_conf = HostConfigurationRequest2G()
-        host_conf = self._populate_user_pb_host_conf(host_conf, target_resource, service_data, cached_config)
+        host_conf = self._populate_user_pb_host_conf(host_conf, target_resource, cached_config)
         ansi_conf.hostsDetails.append(host_conf)
 
         ansi_conf_json = ansi_conf.get_pretty_json()
@@ -493,18 +505,16 @@ class AnsibleSecondGenLogic(object):
         return host_conf
 
     @staticmethod
-    def _populate_user_pb_host_conf(host_conf, curr_resource_obj, service_data, cached_config):
+    def _populate_user_pb_host_conf(host_conf, curr_resource_obj, cached_config):
         """
         user pb - get details from cached params of app - reserved keywords
         :param HostConfigurationRequest2G host_conf:
         :param ResourceInfo curr_resource_obj:
-        :param GenericAnsibleServiceData service_data:
         :param CachedAnsibleConfiguration cached_config:
         :return:
         """
         # USER ATTR FROM LOGICAL RESOURCE
         attrs = curr_resource_obj.ResourceAttributes
-        attrs_dict = {attr.Name: attr.Value for attr in attrs}
         attrs_dict = get_normalized_attrs_dict(attrs)
 
         host_conf.ip = curr_resource_obj.Address
@@ -534,6 +544,7 @@ class AnsibleSecondGenLogic(object):
         host_conf.groups = inventory_groups_list
 
         # CONNECTION METHOD
+        cached_connection_method = cached_config.hosts_conf[0].connection_method
         app_level_connection_method = cached_params_dict.get(user_pb_params.CONNECTION_METHOD_PARAM)
         resource_attr_connection_method = attrs_dict.get(override_attributes.CONNECTION_METHOD_ATTR, "")
 
@@ -541,21 +552,27 @@ class AnsibleSecondGenLogic(object):
         if resource_attr_connection_method.lower() in ["na", "n/a"]:
             resource_attr_connection_method = ""
 
-        # app level takes priority, fall back resource attr, then to 2G service value
+        # app level takes priority, fall back to resource attr, then to stored cached value
         if app_level_connection_method:
             host_conf.connectionMethod = app_level_connection_method
         elif resource_attr_connection_method:
             host_conf.connectionMethod = resource_attr_connection_method
         else:
-            host_conf.connectionMethod = service_data.connection_method
+            host_conf.connectionMethod = cached_connection_method
 
         # CONNECTION SECURED
         app_level_connection_secured = cached_params_dict.get(user_pb_params.CONNECTION_SECURED_PARAM, "")
         resource_attr_connection_secured = attrs_dict.get(override_attributes.CONNECTION_SECURED_ATTR, "")
+        #  cached config object is already a boolean
+        cached_connection_secured = cached_config.hosts_conf[0].connection_secured
+
+        # app level param takes priority, then resource attr, fallback to cached playbook connection
         if app_level_connection_secured:
             host_conf.connectionSecured = True if app_level_connection_secured.lower() == "true" else False
-        else:
+        elif resource_attr_connection_secured:
             host_conf.connectionSecured = True if resource_attr_connection_secured.lower() == "true" else False
+        else:
+            host_conf.connectionSecured = cached_connection_secured
 
         # SCRIPT PARAMS
         host_conf.parameters = get_list_of_param_dicts(cached_config.hosts_conf[0].parameters)
@@ -674,13 +691,12 @@ class AnsibleSecondGenLogic(object):
         ansi_conf.repositoryDetails.password = cached_config.playbook_repo.decrypted_password
 
     @staticmethod
-    def _populate_top_level_user_pb_ansi_conf(ansi_conf, repo_details, service_data, cached_config):
+    def _populate_top_level_user_pb_ansi_conf(ansi_conf, repo_details, cached_config):
         """
         populate all top level data outside of the hosts list
         no return value - side effect helper to populate ansi_conf object
         :param AnsibleConfigurationRequest2G ansi_conf:
         :param CachedPlaybookRepoDecryptedPassword repo_details:
-        :param GenericServiceData service_data:
         :param CachedAnsibleConfiguration cached_config:
         :return:
         """
