@@ -71,6 +71,7 @@ class AnsibleCommandExecutor(object):
                     elapsed_minutes = int(elapsed / 60)
                     elapsed_seconds = int(elapsed)
 
+                    # TODO - wrap incremental output logic into function
                     # Increment minute counter every minute
                     if elapsed_minutes > curr_minutes_counter:
                         curr_minutes_counter += 1
@@ -90,7 +91,8 @@ class AnsibleCommandExecutor(object):
                             if "PLAY [" in curr_line or "TASK [" in curr_line:
                                 # when we hit the line, slice up to that point
                                 logger.debug("playbook / task line: " + curr_line)
-                                logger.debug("playbook / task next line: " + all_txt_lines[i + 1])
+                                if len(all_txt_lines) > i:
+                                    logger.debug("playbook / task next line: " + all_txt_lines[i + 1])
                                 target_chopping_index = i
                                 break
 

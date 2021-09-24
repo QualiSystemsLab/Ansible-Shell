@@ -149,7 +149,7 @@ def merge_extra_params_from_sandbox_data(api, res_id, ansi_conf, reporter):
     sb_data = api.GetSandboxData(reservationId=res_id).SandboxDataKeyValues
     extra_params_data = [x for x in sb_data if x.Key == SANDBOX_DATA_EXTRA_ANSIBLE_PARAMS_KEY]
     if not extra_params_data:
-        reporter.warn_out("No ansible params in sandbox data to merge")
+        reporter.warn_out("No ansible params in sandbox data to merge", log_only=True)
         return
     if len(extra_params_data) > 1:
         reporter.warn_out("More than 1 '{}' key in sandbox data.".format(SANDBOX_DATA_EXTRA_ANSIBLE_PARAMS_KEY))
