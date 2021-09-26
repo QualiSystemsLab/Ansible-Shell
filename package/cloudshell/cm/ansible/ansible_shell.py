@@ -330,7 +330,7 @@ class AnsibleShell(object):
         start_time = default_timer()
         output, error = self.executor.execute_playbook(
             playbook_name, self.INVENTORY_FILE_NAME, ansi_conf.additional_cmd_args, output_writer, logger,
-            cancellation_sampler)
+            cancellation_sampler, service_name)
         total_run_time = default_timer() - start_time
         reporter.info_out("'{}' finished EXECUTING after '{:.2f}' seconds".format(service_name, total_run_time))
 
