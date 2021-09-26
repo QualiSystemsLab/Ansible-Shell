@@ -178,11 +178,13 @@ def merge_sandbox_context_params(reservation_details, ansi_conf, reporter):
     """
     res_id = reservation_details.Id
     res_name = reservation_details.Name
-    blueprint_name = reservation_details.Topologies[0]
+    blueprint_name = reservation_details.Topologies[0].split("/")[-1]  # to account for blueprint folders
+    domain_name = reservation_details.DomainName
     context_params_dict = {
         "SANDBOX_ID": res_id,
         "SANDBOX_NAME": res_name,
-        "BLUEPRINT_NAME": blueprint_name
+        "BLUEPRINT_NAME": blueprint_name,
+        "CLOUDSHELL_DOMAIN": domain_name
     }
     reporter.info_out(
         "Merging sandbox context params to playbook:\n{}".format(json.dumps(context_params_dict, indent=4)),
