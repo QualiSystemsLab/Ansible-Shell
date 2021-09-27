@@ -20,7 +20,8 @@ class AnsibleCommandExecutor(object):
     def __init__(self):
         pass
 
-    def execute_playbook(self, playbook_file, inventory_file, args, output_writer, logger, cancel_sampler, service_name):
+    def execute_playbook(self, playbook_file, inventory_file, args, output_writer, logger, cancel_sampler,
+                         service_name):
         """
         :type playbook_file: str
         :type inventory_file: str
@@ -110,7 +111,7 @@ class AnsibleCommandExecutor(object):
                                                                             total_elapsed_seconds)
                     self._write_to_console_and_log_target_lines(service_name, target_lines, converter,
                                                                 elapsed_run_time,
-                                                                output_writer, logger)
+                                                                output_writer, logger, True)
                 except Exception as e:
                     logger.error("failed to write remaining ansible buffer. {}: {}".format(type(e).__name__, str(e)))
 
@@ -187,7 +188,7 @@ class AnsibleCommandExecutor(object):
 
     def _write_to_console_and_log_target_lines(self, service_name, txt_lines, converter, elapsed_run_time_msg,
                                                output_writer,
-                                               logger):
+                                               logger, final_output=False):
         """
         helper method wrapping up the convert action and adding line break sandwich
         :param str service_name:
@@ -199,8 +200,11 @@ class AnsibleCommandExecutor(object):
         :return:
         """
         playbook_output = self._convert_text(txt_lines, converter)
-        header = warn_span("===== Playbook '{}' output after {} =====".format(service_name,
-                                                                              elapsed_run_time_msg))
+
+        context_msg = "COMPLETED" if final_output else "output"
+        header = warn_span("===== '{}' {} after {} =====".format(service_name,
+                                                                 context_msg,
+                                                                 elapsed_run_time_msg))
         separator = warn_span("============================================================")
         output_msg = "\n{}\n{}{}".format(header,
                                          playbook_output,
