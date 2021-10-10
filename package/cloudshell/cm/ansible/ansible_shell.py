@@ -26,7 +26,7 @@ from cloudshell.shell.core.driver_context import ResourceCommandContext
 from cloudshell.cm.ansible.domain import sandbox_data_caching as sb_data_helper
 from cloudshell.api.cloudshell_api import CloudShellAPISession
 from cloudshell.cm.ansible.domain.Helpers.execution_server_info import get_first_nic_ip
-import cloudshell.cm.ansible.domain.driver_globals as consts
+import cloudshell.cm.ansible.domain.driver_globals as constants
 from timeit import default_timer
 
 
@@ -138,14 +138,14 @@ class AnsibleShell(object):
 
         # populate log path attribute
         if not ansi_conf.is_second_gen_service:
-            self._populate_log_path_attr_value(consts.MGMT_ANSIBLE_LOG_ATTR,
+            self._populate_log_path_attr_value(constants.MGMT_ANSIBLE_LOG_ATTR,
                                                service_name,
                                                api,
                                                ansi_conf.hosts_conf,
                                                reporter)
 
         else:
-            self._populate_log_path_attr_value(consts.USER_ANSIBLE_LOG_ATTR,
+            self._populate_log_path_attr_value(constants.USER_ANSIBLE_LOG_ATTR,
                                                service_name,
                                                api,
                                                ansi_conf.hosts_conf,
@@ -358,10 +358,20 @@ class AnsibleShell(object):
         # timeout_minutes = ansi_conf.timeout_minutes
 
         # since package update does not set value on service setting default hardcoded value to 1
+        # this int is how long to poll the device before determining failure
         timeout_minutes = 1
 
         reporter.info_out(wait_for_deploy_msg)
         for host in ansi_conf.hosts_conf:
+
+            # disable health check if CONNECTIVITY_CHECK param set to disabled value option - ["off", "no", "false"]
+            # set as 'passed' and continue without actually running health check
+            health_check_input = host.parameters.get(constants.ConnectivityCheckAppParam.PARAM_NAME.value, "")
+            if health_check_input.lower() in constants.ConnectivityCheckAppParam.DISABLED_VALUES.value:
+                reporter.info_out("Skipping pre-flight ansible health check for '{}'".format(host.resource_name))
+                host.health_check_passed = True
+                continue
+
             if not host.resource_name:
                 err_msg = "Skipping health check for '{}' due to missing resource name".format(host.ip)
                 reporter.err_out(err_msg)  # can't set live status without resource name :/

@@ -23,7 +23,7 @@ def params_list_to_yaml(key, value):
 
 
 if __name__ == "__main__":
-    vars = {
+    playbook_vars = {
         "param1": "val1",
         "my_list1": "item1,item2,item3",
         "my_list2": "item1,item2,item3",
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     yaml_from_list = params_list_to_yaml("my_key", ["param1", "param2"])
 
     print("---")
-    for key, value in sorted(vars.iteritems()):
+    for key, value in sorted(playbook_vars.iteritems()):
         if value.startswith(("[", "{")):
             print(build_json_to_yaml(key, value))
         elif "," in value:
