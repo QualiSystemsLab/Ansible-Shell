@@ -14,3 +14,6 @@ SANDBOX_DATA_EXTRA_ANSIBLE_PARAMS_KEY = "EXTRA_ANSIBLE_PARAMS"
 class ConnectivityCheckAppParam(Enum):
     PARAM_NAME = "CONNECTIVITY_CHECK"
     DISABLED_VALUES = ["off", "false", "no"]
+
+
+ANSIBLE_PARAM_SSH_COMMON_ARGS = "ansible_ssh_common_args"

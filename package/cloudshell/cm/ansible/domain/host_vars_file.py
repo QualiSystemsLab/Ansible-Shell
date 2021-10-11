@@ -12,6 +12,7 @@ class HostVarsFile(object):
     ANSIBLE_PORT = 'ansible_port'
     ANSIBLE_CONNECTION_FILE = 'ansible_ssh_private_key_file'
     ANSIBLE_WINRM_CERT_VALIDATION = 'ansible_winrm_server_cert_validation'
+    ANSIBLE_SSH_COMMON_ARGS = 'ansible_ssh_common_args'
 
     def __init__(self, file_system, host_name, logger):
         """
