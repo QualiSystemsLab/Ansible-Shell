@@ -42,7 +42,7 @@ class HostVarsFile(object):
                 else:
                     lines.append(str(key) + ': ' + str(value))
             file_stream.write(os.linesep.join(lines))
-            self.logger.debug(os.linesep.join(lines))
+            self.logger.info(os.linesep.join(lines))
         self.logger.info('Done.')
 
     def add_vars(self, playbook_vars):

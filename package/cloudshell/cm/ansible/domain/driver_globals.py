@@ -13,7 +13,8 @@ SANDBOX_DATA_EXTRA_ANSIBLE_PARAMS_KEY = "EXTRA_ANSIBLE_PARAMS"
 # app param to disable preflight health check
 class ConnectivityCheckAppParam(Enum):
     PARAM_NAME = "CONNECTIVITY_CHECK"
-    DISABLED_VALUES = ["off", "false", "no"]
+    DISABLED_VALUES = ["off", "false", "no", "n"]
+    ENABLED_VALUES = ["on", "true", "yes", "y"]
 
 
 ANSIBLE_PARAM_SSH_COMMON_ARGS = "ansible_ssh_common_args"

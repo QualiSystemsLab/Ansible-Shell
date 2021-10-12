@@ -369,10 +369,11 @@ class AnsibleShell(object):
         reporter.info_out(wait_for_deploy_msg)
         for host in ansi_conf.hosts_conf:
 
-            # disable health check if CONNECTIVITY_CHECK param set to disabled value option - ["off", "no", "false"]
+            # disable pre-flight health check by default - CONNECTIVITY_CHECK must be passed and set to ON to run
             health_check_input = host.parameters.get(constants.ConnectivityCheckAppParam.PARAM_NAME.value, "")
-            if health_check_input.lower() in constants.ConnectivityCheckAppParam.DISABLED_VALUES.value:
-                reporter.info_out("Skipping pre-flight ansible health check for '{}'".format(host.resource_name))
+            if health_check_input.lower() not in constants.ConnectivityCheckAppParam.ENABLED_VALUES.value:
+                reporter.info_out("Skipping pre-flight ansible health check for '{}'".format(host.resource_name),
+                                  log_only=True)
                 host.health_check_passed = True
                 continue
 
@@ -520,4 +521,6 @@ class AnsibleShell(object):
                     matching_router_address = matching_router_search[0].FullAddress
                     replaced_val = router_regex.replace_router_app_name_with_address(ssh_param_val,
                                                                                      matching_router_address)
+                    reporter.warn_out("replacing ssh-args router IP '{}' for app '{}'".format(matching_router_address,
+                                                                                              curr_host.resource_name))
                     curr_host.parameters[ssh_param_key] = replaced_val
