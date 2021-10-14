@@ -436,6 +436,9 @@ class AnsibleShell(object):
         :return:
         """
         for host in host_results:
+            if not host.resource_name:
+                # can't set resource live status without a resource name...
+                continue
             # set status for failed playbook results
             if not host.success:
                 if not host.health_check_passed:
