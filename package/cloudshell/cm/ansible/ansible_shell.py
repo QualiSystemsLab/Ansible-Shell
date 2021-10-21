@@ -1,4 +1,5 @@
 import os
+from cloudshell.cm.ansible.domain.Helpers.replace_delimited_app_params import replace_delimited_param_val_with_app_address
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
@@ -28,7 +29,7 @@ from cloudshell.api.cloudshell_api import CloudShellAPISession, ReservedResource
 from cloudshell.cm.ansible.domain.Helpers.execution_server_info import get_first_nic_ip
 import cloudshell.cm.ansible.domain.driver_globals as constants
 from timeit import default_timer
-from cloudshell.cm.ansible.domain.Helpers import router_app_regex as router_regex
+from cloudshell.cm.ansible.domain.Helpers import replace_delimited_app_params as router_regex
 
 
 class AnsibleShell(object):
@@ -161,9 +162,8 @@ class AnsibleShell(object):
         sb_data_helper.merge_sandbox_context_params(sandbox_details, ansi_conf, reporter)
         sb_data_helper.merge_extra_params_from_sandbox_data(api, res_id, ansi_conf, reporter)
 
-        # dynamically updating delimited <router> value in ansible_ssh_common_args
-        self._replace_ssh_common_args_with_router_address(HostVarsFile.ANSIBLE_SSH_COMMON_ARGS, ansi_conf, sb_resources,
-                                                          reporter)
+        # dynamically updating delimited <APP_NAME> value in params with IP of deployed app
+        replace_delimited_param_val_with_app_address(ansi_conf.hosts_conf, sb_resources, reporter)
 
         output_writer = ReservationOutputWriter(api, command_context)
         log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
@@ -250,8 +250,8 @@ class AnsibleShell(object):
                 continue
 
             with HostVarsFile(self.file_system, host_conf.ip, logger) as vars_file:
-                vars_file.add_vars(host_conf.parameters)
                 vars_file.add_connection_type(host_conf.connection_method)
+                vars_file.add_vars(host_conf.parameters)
                 ansible_port = self.ansible_connection_helper.get_ansible_port(host_conf)
                 vars_file.add_port(ansible_port)
 
@@ -371,9 +371,8 @@ class AnsibleShell(object):
 
             # disable pre-flight health check by default - CONNECTIVITY_CHECK must be passed and set to ON to run
             health_check_input = host.parameters.get(constants.ConnectivityCheckAppParam.PARAM_NAME.value, "")
-            if health_check_input.lower() not in constants.ConnectivityCheckAppParam.ENABLED_VALUES.value:
-                reporter.info_out("Skipping pre-flight ansible health check for '{}'".format(host.resource_name),
-                                  log_only=True)
+            if health_check_input.lower() in constants.ConnectivityCheckAppParam.DISABLED_VALUES.value:
+                reporter.info_out("Skipping pre-flight ansible health check for '{}'".format(host.resource_name))
                 host.health_check_passed = True
                 continue
 
@@ -497,33 +496,3 @@ class AnsibleShell(object):
             reporter.err_out(exc_msg)
             raise AnsibleFailedConnectivityException(exc_msg)
 
-    @staticmethod
-    def _replace_ssh_common_args_with_router_address(ssh_param_key, ansi_conf, resources, reporter):
-        """
-        replace the delimited router variable with the Address of the the matching app
-        ansible_ssh_common_args: '-o ProxyCommand="ssh -W %h:%p -q pradmin@<router1>"'
-        :param str ssh_param_key:
-        :param AnsibleConfiguration ansi_conf:
-        :param list[ReservedResourceInfo] resources:
-        :param SandboxReporter reporter:
-        :return:
-        """
-        hosts = ansi_conf.hosts_conf
-        for curr_host in hosts:
-            ssh_param_val = curr_host.parameters.get(ssh_param_key)
-            if ssh_param_val:
-                router_app_name_matches = router_regex.get_router_app_names(ssh_param_val)
-                for router_app_name in router_app_name_matches:
-                    matching_router_search = [x for x in resources
-                                              if x.AppDetails and x.AppDetails.AppName == router_app_name]
-                    if not matching_router_search:
-                        warn_msg = "No match found for '{}' in ssh args param for '{}'".format(router_app_name,
-                                                                                               curr_host.resource_name)
-                        reporter.warn_out(warn_msg)
-                        continue
-                    matching_router_address = matching_router_search[0].FullAddress
-                    replaced_val = router_regex.replace_router_app_name_with_address(ssh_param_val,
-                                                                                     matching_router_address)
-                    reporter.warn_out("replacing ssh-args router IP '{}' for app '{}'".format(matching_router_address,
-                                                                                              curr_host.resource_name))
-                    curr_host.parameters[ssh_param_key] = replaced_val

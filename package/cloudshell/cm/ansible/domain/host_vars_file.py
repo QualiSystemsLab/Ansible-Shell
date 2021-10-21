@@ -42,8 +42,24 @@ class HostVarsFile(object):
                 else:
                     lines.append(str(key) + ': ' + str(value))
             file_stream.write(os.linesep.join(lines))
-            self.logger.info(os.linesep.join(lines))
+            log_lines = self.mask_password_vars(lines)
+            self.logger.info(os.linesep.join(log_lines))
         self.logger.info('Done.')
+
+    def mask_password_vars(self, lines):
+        # mask password values
+        log_lines = []
+        for line in lines:
+            if ":" in line:
+                split = line.split(":")
+                stripped = [x.strip() for x in split]
+                if "pass" in stripped[0]:
+                    stripped[1] = "******"
+                new_line = "{}: {}".format(stripped[0], stripped[1])
+                log_lines.append(new_line)
+            else:
+                log_lines.append(line)
+        return log_lines
 
     def add_vars(self, playbook_vars):
         self.playbook_vars.update(playbook_vars)
