@@ -475,7 +475,7 @@ class AnsibleSecondGenLogic(object):
         # INVENTORY GROUPS
         groups_str = attrs_dict.get(override_attributes.INVENTORY_GROUP_ATTR, "")
         if groups_str:
-            inventory_groups_list = groups_str.strip().split(",")
+            inventory_groups_list = groups_str.strip().split(";")
         else:
             inventory_groups_list = None
         host_conf.groups = inventory_groups_list
@@ -536,9 +536,9 @@ class AnsibleSecondGenLogic(object):
         app_level_inventory_groups = cached_params_dict.get(user_pb_params.INVENTORY_GROUPS_PARAM)
         resource_level_inventory_groups = attrs_dict.get(override_attributes.INVENTORY_GROUP_ATTR)
         if app_level_inventory_groups:
-            inventory_groups_list = app_level_inventory_groups.strip().split(",")
+            inventory_groups_list = app_level_inventory_groups.strip().split(";")
         elif resource_level_inventory_groups:
-            inventory_groups_list = resource_level_inventory_groups.strip().split(",")
+            inventory_groups_list = resource_level_inventory_groups.strip().split(";")
         else:
             inventory_groups_list = None
         host_conf.groups = inventory_groups_list
