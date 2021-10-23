@@ -174,8 +174,8 @@ class AnsibleShell(object):
         # return
 
         cancellation_sampler = CancellationSampler(cancellation_context)
-        with TempFolderScope(self.file_system, logger):
-            # playbook is ultimate dependency, get that first before polling the target hosts
+        with TempFolderScope(self.file_system, logger, True):
+            # playbook download is primary dependency, get that first before polling the target hosts
             playbook_name = self._download_playbook(ansi_conf, service_name, cancellation_sampler, logger,
                                                     reporter)
 
@@ -251,9 +251,9 @@ class AnsibleShell(object):
 
             with HostVarsFile(self.file_system, host_conf.ip, logger) as vars_file:
                 vars_file.add_connection_type(host_conf.connection_method)
-                vars_file.add_vars(host_conf.parameters)
                 ansible_port = self.ansible_connection_helper.get_ansible_port(host_conf)
                 vars_file.add_port(ansible_port)
+                vars_file.add_vars(host_conf.parameters)
 
                 if host_conf.connection_method == AnsibleConnectionHelper.CONNECTION_METHOD_WIN_RM:
                     if host_conf.connection_secured:
