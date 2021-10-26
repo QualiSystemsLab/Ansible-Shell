@@ -26,6 +26,9 @@ def replace_delimited_param_val_with_app_address(host_conf_list, resources, repo
     for curr_host in host_conf_list:
         params = curr_host.parameters
         for param_name, param_value in params.items():
+            if type(param_value) == list or type(param_value) == dict:
+                # TODO - see where dict / list conversion of param is happening
+                continue
             app_name_matches = _get_app_names_matching_delimiters(param_value)
             if not app_name_matches:
                 continue
