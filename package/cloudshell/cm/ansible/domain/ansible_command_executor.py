@@ -10,7 +10,7 @@ from cloudshell.cm.ansible.domain.output.ansible_result import AnsibleResult
 from cloudshell.shell.core.context import ResourceCommandContext
 from cloudshell.cm.ansible.domain.stdout_accumulator import StdoutAccumulator, StderrAccumulator
 from Helpers.html_print_wrappers import warn_span
-from exceptions import AnsibleNotFoundException
+from exceptions import AnsibleNotFoundException, EsCommandException
 
 
 class AnsibleCommandExecutor(object):
@@ -169,6 +169,21 @@ class AnsibleCommandExecutor(object):
                                                                                        err_outp)
             raise AnsibleNotFoundException(exc_msg)
         return outp
+
+    @staticmethod
+    def send_es_command_non_blocking(command):
+        process = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+        return process
+
+    @staticmethod
+    def send_es_command_blocking(command):
+        process = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+        std_out, std_err = process.communicate()
+        if std_err:
+            raise EsCommandException("Error running ES command.\n"
+                                     "Command: {}\n"
+                                     "Error Output: {}".format(command, std_err))
+        return std_out
 
     @staticmethod
     def _convert_text(txt_lines, converter):

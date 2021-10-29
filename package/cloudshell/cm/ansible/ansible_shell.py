@@ -1,4 +1,7 @@
+import json
 import os
+import time
+
 from cloudshell.cm.ansible.domain.Helpers.replace_delimited_app_params import replace_delimited_param_val_with_app_address
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
@@ -29,8 +32,7 @@ from cloudshell.api.cloudshell_api import CloudShellAPISession, ReservedResource
 from cloudshell.cm.ansible.domain.Helpers.execution_server_info import get_first_nic_ip
 import cloudshell.cm.ansible.domain.driver_globals as constants
 from timeit import default_timer
-
-from cloudshell.cm.ansible.domain.Helpers import replace_delimited_app_params as router_regex
+from cloudshell.cm.ansible.domain.Helpers.extract_es_commands import extract_es_commands_from_host_conf
 
 
 class AnsibleShell(object):
@@ -165,6 +167,7 @@ class AnsibleShell(object):
 
         # dynamically updating delimited <APP_NAME> value in params with IP of deployed app
         replace_delimited_param_val_with_app_address(ansi_conf.hosts_conf, sb_resources, reporter)
+        es_pre_command, es_post_command = extract_es_commands_from_host_conf(ansi_conf.hosts_conf, reporter)
 
         output_writer = ReservationOutputWriter(api, command_context)
         log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
@@ -191,14 +194,33 @@ class AnsibleShell(object):
             self._add_inventory_file(ansi_conf, logger)
             self._add_host_vars_files(ansi_conf, logger)
 
+            pre_command_process = None
+            if es_pre_command:
+                reporter.warn_out("Running non-blocking Pre-Connectivity Command")
+                reporter.info_out(es_pre_command)
+                pre_command_process = self.executor.send_es_command_non_blocking(es_pre_command)
+
             # run the downloaded playbook against all hosts that passed connectivity check
             ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
                                                                   cancellation_sampler,
                                                                   logger, reporter, service_name)
+            if pre_command_process:
+                pre_command_process.kill()
+            if es_post_command:
+                reporter.warn_out("Running non-blocking Post-connectivity Command")
+                reporter.info_out(es_post_command)
+                post_command_process = self.executor.send_es_command_non_blocking(es_post_command)
+                time.sleep(3)
+                post_command_process.kill()
 
             # if failed set live error status, if passed set green with run time info
-            self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
-                                                     run_time_seconds, api)
+            try:
+                self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
+                                                         run_time_seconds, api)
+            except Exception as e:
+                err_msg = "'{}' had issue setting live status for apps. {}: {}".format(service_name, type(e).__name__, str(e))
+                reporter.err_out(err_msg)
+                reporter.info_out("Failed hosts: {}".format(ansible_result.to_json()))
 
             # when re-running playbooks from setup need to clear the error key
             sb_data_helper.reset_failed_sandbox_data(service_name, api, res_id, logger)
@@ -497,3 +519,18 @@ class AnsibleShell(object):
             reporter.err_out(exc_msg)
             raise AnsibleFailedConnectivityException(exc_msg)
 
+    def _run_es_command_non_blocking(self, command, reporter):
+        """
+
+        :param str command:
+        :param SandboxReporter reporter:
+        :return:
+        """
+        if not command:
+            return
+
+        reporter.warn_out("Running non blocking ES command: {}".format(command))
+        try:
+            process = self.executor.send_es_command_non_blocking(command)
+        except Exception as e:
+            reporter.err_out("Error running ES command. {}: {}".format(type(e).__name__, str(e)))
