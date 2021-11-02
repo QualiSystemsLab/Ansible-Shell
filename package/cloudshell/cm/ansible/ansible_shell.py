@@ -167,7 +167,7 @@ class AnsibleShell(object):
 
         # dynamically updating delimited <APP_NAME> value in params with IP of deployed app
         replace_delimited_param_val_with_app_address(ansi_conf.hosts_conf, sb_resources, reporter)
-        es_pre_command, es_post_command = extract_es_commands_from_host_conf(ansi_conf.hosts_conf, reporter)
+        es_pre_commands, es_post_commands = extract_es_commands_from_host_conf(ansi_conf.hosts_conf, reporter)
 
         output_writer = ReservationOutputWriter(api, command_context)
         log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
@@ -194,24 +194,32 @@ class AnsibleShell(object):
             self._add_inventory_file(ansi_conf, logger)
             self._add_host_vars_files(ansi_conf, logger)
 
-            pre_command_process = None
-            if es_pre_command:
-                reporter.warn_out("Running non-blocking Pre-Connectivity Command")
-                reporter.info_out(es_pre_command)
-                pre_command_process = self.executor.send_es_command_non_blocking(es_pre_command)
+            pre_command_processes = []
+            if es_pre_commands:
+                reporter.warn_out("Running non-blocking Pre-Connectivity Commands")
+                for curr_command in es_pre_commands:
+                    reporter.info_out(curr_command)
+                    process = self.executor.send_es_command_non_blocking(curr_command)
+                    pre_command_processes.append(process)
 
             # run the downloaded playbook against all hosts that passed connectivity check
             ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
                                                                   cancellation_sampler,
                                                                   logger, reporter, service_name)
-            if pre_command_process:
-                pre_command_process.kill()
-            if es_post_command:
-                reporter.warn_out("Running non-blocking Post-connectivity Command")
-                reporter.info_out(es_post_command)
-                post_command_process = self.executor.send_es_command_non_blocking(es_post_command)
-                time.sleep(3)
-                post_command_process.kill()
+            # clean up pre_command_processes
+            if pre_command_processes:
+                for curr_process in pre_command_processes:
+                    # poll is None means process is alive
+                    if curr_process.poll() is None:
+                        curr_process.kill()
+
+            if es_post_commands:
+                reporter.warn_out("Running non-blocking Post-connectivity Commands")
+                for curr_command in es_post_commands:
+                    reporter.info_out(curr_command)
+                    process = self.executor.send_es_command_non_blocking(curr_command)
+                    if process.poll() is None:
+                        process.kill()
 
             # if failed set live error status, if passed set green with run time info
             try:

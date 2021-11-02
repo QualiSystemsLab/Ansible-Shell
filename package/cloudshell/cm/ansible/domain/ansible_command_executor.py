@@ -15,7 +15,7 @@ from exceptions import AnsibleNotFoundException, EsCommandException
 
 class AnsibleCommandExecutor(object):
     POLLING_INTERVAL_SECONDS = 2
-    MINIMUM_CHUNKED_OUTPUT_LINE_SIZE = 20
+    MINIMUM_CHUNKED_OUTPUT_LINE_SIZE = 10
 
     def __init__(self):
         pass
