@@ -199,27 +199,36 @@ class AnsibleShell(object):
                 reporter.warn_out("Running non-blocking Pre-Connectivity Commands")
                 for curr_command in es_pre_commands:
                     reporter.info_out(curr_command)
-                    process = self.executor.send_es_command_non_blocking(curr_command)
+                    process = self.executor.send_es_command_non_blocking_shell_true(curr_command)
                     pre_command_processes.append(process)
 
             # run the downloaded playbook against all hosts that passed connectivity check
-            ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
-                                                                  cancellation_sampler,
-                                                                  logger, reporter, service_name)
-            # clean up pre_command_processes
-            if pre_command_processes:
-                for curr_process in pre_command_processes:
-                    # poll is None means process is alive
-                    if curr_process.poll() is None:
-                        curr_process.kill()
+            try:
+                ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
+                                                                      cancellation_sampler,
+                                                                      logger, reporter, service_name)
+            except Exception as e:
+                reporter.exc_out("Error during ansible playbook run. {}: {}".format(type(e).__name__,
+                                                                                    str(e)))
+                raise
+            finally:
+                # clean up pre_command_processes
+                if pre_command_processes:
+                    for curr_process in pre_command_processes:
+                        # poll is None means process is alive
+                        if curr_process.poll() is None:
+                            reporter.info_out("killing process {}".format(curr_process.pid))
+                            curr_process.kill()
 
-            if es_post_commands:
-                reporter.warn_out("Running non-blocking Post-connectivity Commands")
-                for curr_command in es_post_commands:
-                    reporter.info_out(curr_command)
-                    process = self.executor.send_es_command_non_blocking(curr_command)
-                    if process.poll() is None:
-                        process.kill()
+                if es_post_commands:
+                    reporter.warn_out("Running non-blocking Post-connectivity Commands")
+                    for curr_command in es_post_commands:
+                        reporter.info_out(curr_command)
+                        process = self.executor.send_es_command_non_blocking_shell_true(curr_command)
+                        time.sleep(2)
+                        if process.poll() is None:
+                            reporter.info_out("killing process {}".format(process.pid))
+                            process.kill()
 
             # if failed set live error status, if passed set green with run time info
             try:
@@ -539,6 +548,6 @@ class AnsibleShell(object):
 
         reporter.warn_out("Running non blocking ES command: {}".format(command))
         try:
-            process = self.executor.send_es_command_non_blocking(command)
+            process = self.executor.send_es_command_non_blocking_shell_true(command)
         except Exception as e:
             reporter.err_out("Error running ES command. {}: {}".format(type(e).__name__, str(e)))

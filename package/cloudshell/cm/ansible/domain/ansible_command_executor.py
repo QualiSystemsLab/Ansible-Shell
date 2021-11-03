@@ -171,7 +171,7 @@ class AnsibleCommandExecutor(object):
         return outp
 
     @staticmethod
-    def send_es_command_non_blocking(command):
+    def send_es_command_non_blocking_shell_true(command):
         process = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
         return process
 
