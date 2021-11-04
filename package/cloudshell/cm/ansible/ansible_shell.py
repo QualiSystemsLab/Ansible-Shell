@@ -3,6 +3,7 @@ import os
 import time
 
 from cloudshell.cm.ansible.domain.Helpers.replace_delimited_app_params import replace_delimited_param_val_with_app_address
+from cloudshell.cm.ansible.domain.Helpers.replace_delimited_port import replace_delimited_port_with_random_port
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
@@ -165,9 +166,7 @@ class AnsibleShell(object):
         sb_data_helper.merge_sandbox_context_params(sandbox_details, ansi_conf, reporter)
         sb_data_helper.merge_extra_params_from_sandbox_data(api, res_id, ansi_conf, reporter)
 
-        # dynamically updating delimited <APP_NAME> value in params with IP of deployed app
-        replace_delimited_param_val_with_app_address(ansi_conf.hosts_conf, sb_resources, reporter)
-        es_pre_commands, es_post_commands = extract_es_commands_from_host_conf(ansi_conf.hosts_conf, reporter)
+
 
         output_writer = ReservationOutputWriter(api, command_context)
         log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
@@ -188,6 +187,13 @@ class AnsibleShell(object):
 
             # if all hosts failed health check throw exception and exit
             self._validate_host_connectivity(ansi_conf.hosts_conf, service_name, reporter)
+
+            # dynamically updating delimited <APP_NAME> value in params with IP of deployed app
+            replace_delimited_param_val_with_app_address(ansi_conf.hosts_conf, sb_resources, reporter)
+
+            # replace [PORT] delimited values
+            replace_delimited_port_with_random_port(ansi_conf.hosts_conf, reporter)
+            es_pre_commands, es_post_commands = extract_es_commands_from_host_conf(ansi_conf.hosts_conf, reporter)
 
             # build ansible auxiliary file dependencies for playbook
             self._add_ansible_config_file(logger)
