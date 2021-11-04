@@ -1,5 +1,6 @@
 import json
 import os
+import signal
 import time
 
 from cloudshell.cm.ansible.domain.Helpers.replace_delimited_app_params import replace_delimited_param_val_with_app_address
@@ -224,7 +225,7 @@ class AnsibleShell(object):
                         # poll is None means process is alive
                         if curr_process.poll() is None:
                             reporter.info_out("killing process {}".format(curr_process.pid))
-                            curr_process.kill()
+                            os.kill(curr_process.pid, signal.SIGTERM)
 
                 if es_post_commands:
                     reporter.warn_out("Running non-blocking Post-connectivity Commands")
@@ -234,7 +235,7 @@ class AnsibleShell(object):
                         time.sleep(2)
                         if process.poll() is None:
                             reporter.info_out("killing process {}".format(process.pid))
-                            process.kill()
+                            os.kill(process.pid, signal.SIGTERM)
 
             # if failed set live error status, if passed set green with run time info
             try:
