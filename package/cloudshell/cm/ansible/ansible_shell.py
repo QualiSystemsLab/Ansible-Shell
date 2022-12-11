@@ -1,4 +1,10 @@
+import json
 import os
+import signal
+import time
+
+from cloudshell.cm.ansible.domain.Helpers.replace_delimited_app_params import replace_delimited_param_val_with_app_address
+from cloudshell.cm.ansible.domain.Helpers.replace_delimited_port import replace_delimited_port_with_random_port
 from cloudshell.cm.ansible.domain.Helpers.ansible_connection_helper import AnsibleConnectionHelper
 from cloudshell.cm.ansible.domain.Helpers.sandbox_reporter import SandboxReporter
 from cloudshell.cm.ansible.domain.cancellation_sampler import CancellationSampler
@@ -28,7 +34,7 @@ from cloudshell.api.cloudshell_api import CloudShellAPISession, ReservedResource
 from cloudshell.cm.ansible.domain.Helpers.execution_server_info import get_first_nic_ip
 import cloudshell.cm.ansible.domain.driver_globals as constants
 from timeit import default_timer
-from cloudshell.cm.ansible.domain.Helpers import router_app_regex as router_regex
+from cloudshell.cm.ansible.domain.Helpers.extract_es_commands import extract_es_commands_from_host_conf
 
 
 class AnsibleShell(object):
@@ -161,9 +167,7 @@ class AnsibleShell(object):
         sb_data_helper.merge_sandbox_context_params(sandbox_details, ansi_conf, reporter)
         sb_data_helper.merge_extra_params_from_sandbox_data(api, res_id, ansi_conf, reporter)
 
-        # dynamically updating delimited <router> value in ansible_ssh_common_args
-        self._replace_ssh_common_args_with_router_address(HostVarsFile.ANSIBLE_SSH_COMMON_ARGS, ansi_conf, sb_resources,
-                                                          reporter)
+
 
         output_writer = ReservationOutputWriter(api, command_context)
         log_msg = "Ansible Config Object after manipulations:\n{}".format(ansi_conf.get_pretty_json())
@@ -174,8 +178,8 @@ class AnsibleShell(object):
         # return
 
         cancellation_sampler = CancellationSampler(cancellation_context)
-        with TempFolderScope(self.file_system, logger):
-            # playbook is ultimate dependency, get that first before polling the target hosts
+        with TempFolderScope(self.file_system, logger, True):
+            # playbook download is primary dependency, get that first before polling the target hosts
             playbook_name = self._download_playbook(ansi_conf, service_name, cancellation_sampler, logger,
                                                     reporter)
 
@@ -185,19 +189,62 @@ class AnsibleShell(object):
             # if all hosts failed health check throw exception and exit
             self._validate_host_connectivity(ansi_conf.hosts_conf, service_name, reporter)
 
+            # dynamically updating delimited <APP_NAME> value in params with IP of deployed app
+            replace_delimited_param_val_with_app_address(ansi_conf.hosts_conf, sb_resources, reporter)
+
+            # replace [PORT] delimited values
+            replace_delimited_port_with_random_port(ansi_conf.hosts_conf, reporter)
+            es_pre_commands, es_post_commands = extract_es_commands_from_host_conf(ansi_conf.hosts_conf, reporter)
+
             # build ansible auxiliary file dependencies for playbook
             self._add_ansible_config_file(logger)
             self._add_inventory_file(ansi_conf, logger)
             self._add_host_vars_files(ansi_conf, logger)
 
+            pre_command_processes = []
+            if es_pre_commands:
+                reporter.warn_out("Running non-blocking Pre-Connectivity Commands")
+                for curr_command in es_pre_commands:
+                    reporter.info_out(curr_command)
+                    process = self.executor.send_es_command_non_blocking_shell_true(curr_command)
+                    pre_command_processes.append(process)
+
             # run the downloaded playbook against all hosts that passed connectivity check
-            ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
-                                                                  cancellation_sampler,
-                                                                  logger, reporter, service_name)
+            try:
+                ansible_result, run_time_seconds = self._run_playbook(ansi_conf, playbook_name, output_writer,
+                                                                      cancellation_sampler,
+                                                                      logger, reporter, service_name)
+            except Exception as e:
+                reporter.exc_out("Error during ansible playbook run. {}: {}".format(type(e).__name__,
+                                                                                    str(e)))
+                raise
+            finally:
+                # clean up pre_command_processes
+                if pre_command_processes:
+                    for curr_process in pre_command_processes:
+                        # poll is None means process is alive
+                        if curr_process.poll() is None:
+                            reporter.info_out("killing process {}".format(curr_process.pid))
+                            os.kill(curr_process.pid, signal.SIGTERM)
+
+                if es_post_commands:
+                    reporter.warn_out("Running non-blocking Post-connectivity Commands")
+                    for curr_command in es_post_commands:
+                        reporter.info_out(curr_command)
+                        process = self.executor.send_es_command_non_blocking_shell_true(curr_command)
+                        time.sleep(2)
+                        if process.poll() is None:
+                            reporter.info_out("killing process {}".format(process.pid))
+                            os.kill(process.pid, signal.SIGTERM)
 
             # if failed set live error status, if passed set green with run time info
-            self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
-                                                     run_time_seconds, api)
+            try:
+                self._set_live_status_for_playbook_hosts(ansible_result.host_results, service_name,
+                                                         run_time_seconds, api)
+            except Exception as e:
+                err_msg = "'{}' had issue setting live status for apps. {}: {}".format(service_name, type(e).__name__, str(e))
+                reporter.err_out(err_msg)
+                reporter.info_out("Failed hosts: {}".format(ansible_result.to_json()))
 
             # when re-running playbooks from setup need to clear the error key
             sb_data_helper.reset_failed_sandbox_data(service_name, api, res_id, logger)
@@ -250,10 +297,10 @@ class AnsibleShell(object):
                 continue
 
             with HostVarsFile(self.file_system, host_conf.ip, logger) as vars_file:
-                vars_file.add_vars(host_conf.parameters)
                 vars_file.add_connection_type(host_conf.connection_method)
                 ansible_port = self.ansible_connection_helper.get_ansible_port(host_conf)
                 vars_file.add_port(ansible_port)
+                vars_file.add_vars(host_conf.parameters)
 
                 if host_conf.connection_method == AnsibleConnectionHelper.CONNECTION_METHOD_WIN_RM:
                     if host_conf.connection_secured:
@@ -371,9 +418,8 @@ class AnsibleShell(object):
 
             # disable pre-flight health check by default - CONNECTIVITY_CHECK must be passed and set to ON to run
             health_check_input = host.parameters.get(constants.ConnectivityCheckAppParam.PARAM_NAME.value, "")
-            if health_check_input.lower() not in constants.ConnectivityCheckAppParam.ENABLED_VALUES.value:
-                reporter.info_out("Skipping pre-flight ansible health check for '{}'".format(host.resource_name),
-                                  log_only=True)
+            if health_check_input.lower() in constants.ConnectivityCheckAppParam.DISABLED_VALUES.value:
+                reporter.info_out("Skipping pre-flight ansible health check for '{}'".format(host.resource_name))
                 host.health_check_passed = True
                 continue
 
@@ -497,33 +543,18 @@ class AnsibleShell(object):
             reporter.err_out(exc_msg)
             raise AnsibleFailedConnectivityException(exc_msg)
 
-    @staticmethod
-    def _replace_ssh_common_args_with_router_address(ssh_param_key, ansi_conf, resources, reporter):
+    def _run_es_command_non_blocking(self, command, reporter):
         """
-        replace the delimited router variable with the Address of the the matching app
-        ansible_ssh_common_args: '-o ProxyCommand="ssh -W %h:%p -q pradmin@<router1>"'
-        :param str ssh_param_key:
-        :param AnsibleConfiguration ansi_conf:
-        :param list[ReservedResourceInfo] resources:
+
+        :param str command:
         :param SandboxReporter reporter:
         :return:
         """
-        hosts = ansi_conf.hosts_conf
-        for curr_host in hosts:
-            ssh_param_val = curr_host.parameters.get(ssh_param_key)
-            if ssh_param_val:
-                router_app_name_matches = router_regex.get_router_app_names(ssh_param_val)
-                for router_app_name in router_app_name_matches:
-                    matching_router_search = [x for x in resources
-                                              if x.AppDetails and x.AppDetails.AppName == router_app_name]
-                    if not matching_router_search:
-                        warn_msg = "No match found for '{}' in ssh args param for '{}'".format(router_app_name,
-                                                                                               curr_host.resource_name)
-                        reporter.warn_out(warn_msg)
-                        continue
-                    matching_router_address = matching_router_search[0].FullAddress
-                    replaced_val = router_regex.replace_router_app_name_with_address(ssh_param_val,
-                                                                                     matching_router_address)
-                    reporter.warn_out("replacing ssh-args router IP '{}' for app '{}'".format(matching_router_address,
-                                                                                              curr_host.resource_name))
-                    curr_host.parameters[ssh_param_key] = replaced_val
+        if not command:
+            return
+
+        reporter.warn_out("Running non blocking ES command: {}".format(command))
+        try:
+            process = self.executor.send_es_command_non_blocking_shell_true(command)
+        except Exception as e:
+            reporter.err_out("Error running ES command. {}: {}".format(type(e).__name__, str(e)))

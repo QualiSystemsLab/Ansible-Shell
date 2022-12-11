@@ -161,20 +161,18 @@ def bool_parse(b):
 
 class AnsibleServiceNameParser(object):
 
+    MGMT_DEPLOY_ORDER_PARAM = "MGMT_DEPLOY_ORDER"
+
     def __init__(self, ansible_json):
         """
         for some custom actions
         :param str ansible_json:
         """
         self._ansible_json = ansible_json
-        self.is_second_gen_service = False
-        self.repo_url = None
-        self._load_json()
-
-    def _load_json(self):
-        json_obj = json.loads(self._ansible_json)
-        self.is_second_gen_service = json_obj.get('isSecondGenService', False)
-        self.repo_url = json_obj['repositoryDetails'].get('url')
+        self.ansi_conf_dict = json.loads(ansible_json)
+        self.is_second_gen_service = self.ansi_conf_dict.get('isSecondGenService', False)
+        self.repo_url = self.ansi_conf_dict['repositoryDetails'].get('url')
+        self.host_confs = self.ansi_conf_dict['hostsDetails']
 
     def rename_first_gen_service_name(self, current_first_gen_name):
         """
@@ -183,8 +181,39 @@ class AnsibleServiceNameParser(object):
         """
         first_gen_server_id = current_first_gen_name.split("_")[1].split("--")[0].strip()
         script_path = parse_script_path_from_url(self.repo_url)
-        service_name = "{}_{}__{}".format(DRIVER_SERVICE_NAME_PREFIX, first_gen_server_id, script_path)
+        deploy_order = self._get_mgmt_deploy_order_from_params()
+        if deploy_order:
+            service_name = "{}_{}_{}__{}".format(DRIVER_SERVICE_NAME_PREFIX, deploy_order, first_gen_server_id, script_path)
+        else:
+            service_name = "{}_{}__{}".format(DRIVER_SERVICE_NAME_PREFIX, first_gen_server_id, script_path)
         return service_name
+
+    def _get_target_param_value(self, param_list):
+        for curr_param in param_list:
+            if curr_param["name"] == self.MGMT_DEPLOY_ORDER_PARAM:
+                return curr_param["value"]
+
+    def _get_mgmt_deploy_order_from_params(self):
+        """
+        find deploy order from list of hosts
+        assuming that all apps in deploy order "wave" will have same value, so taking the first one only
+        :return:
+        """
+        deploy_order = None
+        for curr_host_conf in self.host_confs:
+            params_list = curr_host_conf["parameters"]
+            deploy_order_val = self._get_target_param_value(params_list)
+            # handle the "NA" case
+            try:
+                deploy_order_int = int(deploy_order_val)
+            except:
+                pass
+            else:
+                deploy_order = deploy_order_int
+
+            if deploy_order:
+                return deploy_order
+
 
 
 

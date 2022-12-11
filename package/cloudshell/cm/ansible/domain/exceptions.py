@@ -1,22 +1,27 @@
 class AnsibleDriverException(Exception):
+    """ the base exception class """
     pass
 
 
-class CancellationException(Exception):
+class CancellationException(AnsibleDriverException):
     pass
 
 
-class PlaybookDownloadException(Exception):
+class PlaybookDownloadException(AnsibleDriverException):
     pass
 
 
-class AnsibleFailedConnectivityException(Exception):
+class AnsibleFailedConnectivityException(AnsibleDriverException):
     pass
 
 
-class AnsibleNotFoundException(Exception):
+class AnsibleNotFoundException(AnsibleDriverException):
     pass
 
 
-class AnsibleConfigNotFoundException(Exception):
+class AnsibleConfigNotFoundException(AnsibleDriverException):
+    pass
+
+
+class EsCommandException(AnsibleDriverException):
     pass

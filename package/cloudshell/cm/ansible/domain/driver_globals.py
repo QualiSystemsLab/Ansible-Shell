@@ -17,4 +17,9 @@ class ConnectivityCheckAppParam(Enum):
     ENABLED_VALUES = ["on", "true", "yes", "y"]
 
 
+class EsConnectivityCommandParams(Enum):
+    PRE_COMMAND_PARAM = "CONNECTIVITY_PRE_COMMAND"
+    POST_COMMAND_PARAM = "CONNECTIVITY_POST_COMMAND"
+
+
 ANSIBLE_PARAM_SSH_COMMON_ARGS = "ansible_ssh_common_args"

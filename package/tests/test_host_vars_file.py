@@ -1,3 +1,4 @@
+import json
 from unittest import TestCase
 from cloudshell.cm.ansible.domain.host_vars_file import HostVarsFile
 from mocks.file_system_service_mock import FileSystemServiceMock
@@ -51,3 +52,13 @@ class TestHostVarsFile(TestCase):
             f.add_vars({'param3': 'W'})
         self.assertEquals(os.linesep.join(['---', 'param1: "abc"', 'param2: "123"', 'param3: "W"']),
                           self.file_system.read_all_lines('host_vars', 'host1'))
+
+    def test_mask_password_vars(self):
+        input_lines = [
+            "param1: value1",
+            "param2: value2",
+            "ansible_ssh_common_args: \'-o ProxyCommand=\"ssh -W %h:%p -q pradmin@<ROUTER1>\"\'"
+        ]
+        output_lines = HostVarsFile._mask_password_vars(input_lines)
+        print(json.dumps(output_lines, indent=4))
+        pass

@@ -393,11 +393,11 @@ class AnsibleSecondGenLogic(object):
         self._log_ansi_conf_with_masked_password(ansi_conf_json, reporter)
         return ansi_conf_json
 
-    def get_cached_ansible_user_pb_config_json(self, service_data, target_resource, repo_details, cached_config,
+    def get_cached_ansible_user_pb_config_json(self, api, target_resource, repo_details, cached_config,
                                                reporter):
         """
         Bulk of control flow logic in this method. The different playbook commands expect their correct json from here.
-        :param GenericAnsibleServiceData service_data:
+        :param CloudShellAPISession api:
         :param ResourceInfo target_resource:
         :param CachedPlaybookRepoDecryptedPassword repo_details:
         :param CachedAnsibleConfiguration cached_config:
@@ -410,7 +410,7 @@ class AnsibleSecondGenLogic(object):
 
         # START BUILDING REQUEST FOR SINGLE HOST
         host_conf = HostConfigurationRequest2G()
-        host_conf = self._populate_user_pb_host_conf(host_conf, target_resource, cached_config)
+        host_conf = self._populate_user_pb_host_conf(api, host_conf, target_resource, cached_config)
         ansi_conf.hostsDetails.append(host_conf)
 
         ansi_conf_json = ansi_conf.get_pretty_json()
@@ -475,7 +475,7 @@ class AnsibleSecondGenLogic(object):
         # INVENTORY GROUPS
         groups_str = attrs_dict.get(override_attributes.INVENTORY_GROUP_ATTR, "")
         if groups_str:
-            inventory_groups_list = groups_str.strip().split(",")
+            inventory_groups_list = groups_str.strip().split(";")
         else:
             inventory_groups_list = None
         host_conf.groups = inventory_groups_list
@@ -505,20 +505,24 @@ class AnsibleSecondGenLogic(object):
         return host_conf
 
     @staticmethod
-    def _populate_user_pb_host_conf(host_conf, curr_resource_obj, cached_config):
+    def _populate_user_pb_host_conf(api, host_conf, curr_resource_obj, cached_config):
         """
+        need api to ensure no stale resource IP!
         user pb - get details from cached params of app - reserved keywords
+        :param CloudShellAPISession api:
         :param HostConfigurationRequest2G host_conf:
         :param ResourceInfo curr_resource_obj:
         :param CachedAnsibleConfiguration cached_config:
         :return:
         """
         # USER ATTR FROM LOGICAL RESOURCE
+        resource_name = curr_resource_obj.Name
+        resource_details = api.GetResourceDetails(resource_name)
         attrs = curr_resource_obj.ResourceAttributes
         attrs_dict = get_normalized_attrs_dict(attrs)
 
-        host_conf.ip = curr_resource_obj.Address
-        host_conf.resourceName = curr_resource_obj.Name
+        host_conf.resourceName = resource_name
+        host_conf.ip = resource_details.Address
         user_val = attrs_dict.get("User", "")
         host_conf.username = user_val
 
@@ -536,9 +540,9 @@ class AnsibleSecondGenLogic(object):
         app_level_inventory_groups = cached_params_dict.get(user_pb_params.INVENTORY_GROUPS_PARAM)
         resource_level_inventory_groups = attrs_dict.get(override_attributes.INVENTORY_GROUP_ATTR)
         if app_level_inventory_groups:
-            inventory_groups_list = app_level_inventory_groups.strip().split(",")
+            inventory_groups_list = app_level_inventory_groups.strip().split(";")
         elif resource_level_inventory_groups:
-            inventory_groups_list = resource_level_inventory_groups.strip().split(",")
+            inventory_groups_list = resource_level_inventory_groups.strip().split(";")
         else:
             inventory_groups_list = None
         host_conf.groups = inventory_groups_list

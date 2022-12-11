@@ -1,6 +1,6 @@
 Metadata-Version: 1.1
 Name: cs-ansible-second-gen
-Version: 2.0.2
+Version: 2.0.4
 Summary: A package for sharing command logic between ansible 2G services - admin and regular flavor
 Home-page: UNKNOWN
 Author: Quali

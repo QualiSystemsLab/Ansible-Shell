@@ -128,7 +128,7 @@ class AnsibleSecondGenCommands(object):
             raise AnsibleSecondGenServiceException(err_msg)
 
         try:
-            ansible_config_json = self._logic.get_cached_ansible_user_pb_config_json(service_data,
+            ansible_config_json = self._logic.get_cached_ansible_user_pb_config_json(api,
                                                                                      target_resource,
                                                                                      repo_details,
                                                                                      cached_config,
