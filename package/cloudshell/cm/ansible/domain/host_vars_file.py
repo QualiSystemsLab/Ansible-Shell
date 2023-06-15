@@ -7,7 +7,7 @@ from Helpers.build_ansible_list_var import params_list_to_yaml, build_simple_lis
 class HostVarsFile(object):
     FOLDER_NAME = 'host_vars'
     ANSIBLE_USER = 'ansible_user'
-    ANSIBLE_PASSWORD = 'ansible_ssh_pass'
+    ANSIBLE_PASSWORD = 'ansible_password'
     ANSIBLE_CONNECTION = 'ansible_connection'
     ANSIBLE_PORT = 'ansible_port'
     ANSIBLE_CONNECTION_FILE = 'ansible_ssh_private_key_file'

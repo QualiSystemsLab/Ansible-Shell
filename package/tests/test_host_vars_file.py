@@ -31,7 +31,7 @@ class TestHostVarsFile(TestCase):
     def test_can_add_connection_type(self):
         with HostVarsFile(self.file_system, 'host1', Mock()) as f:
             f.add_password('1234')
-        self.assertEquals(os.linesep.join(['---', 'ansible_ssh_pass: "1234"']),
+        self.assertEquals(os.linesep.join(['---', 'ansible_password: "1234"']),
                           self.file_system.read_all_lines('host_vars', 'host1'))
 
     def test_can_add_connection_key_file(self):
