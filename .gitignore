@@ -11,3 +11,4 @@ drivers/ansible_shell.zip
 *.zip
 dist/
 .vscode/
+.DS_Store
